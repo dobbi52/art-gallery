@@ -81,8 +81,21 @@ service cloud.firestore {
       }
     }
 
+    // 전시실 자료 (링크, 영상, 파일, 참고 이미지, 메모) - 넣기와 고치기는 선생님만
+    match /items/{id} {
+      allow read: if isTeacher() || (isMember() && resource.data.year == settings().year);
+      allow write: if isTeacher();
+    }
+
+    // 대표 작품실 - 학생은 보기만, 이름은 들어 있지 않음
+    match /featured/{id} {
+      allow read: if isTeacher() || isMember();
+      allow write: if isTeacher();
+    }
+
     function validNewWork(d) {
-      return d.uid == request.auth.uid
+      return d.keys().hasOnly(['boardId','year','uid','no','name','title','desc','photos','likes','hidden','createdAt'])
+        && d.uid == request.auth.uid
         && d.no == me().no
         && d.name == me().name
         && d.year == settings().year

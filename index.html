@@ -181,6 +181,34 @@ textarea{resize:vertical;min-height:72px}
 .expo .room-t{position:absolute;top:calc(env(safe-area-inset-top,0px) + 18px);left:max(24px,calc(env(safe-area-inset-left,0px) + 24px));font-family:var(--serif);font-size:14px;color:#9C9990}
 .fade{opacity:0}
 #printArea{display:none}
+.items{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;margin-bottom:40px}
+.ic{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden;min-width:0}
+.ic-main{display:flex;flex-direction:column;text-align:left;color:inherit;text-decoration:none;background:none;border:0;padding:0;flex:1;font:inherit;width:100%}
+a.ic-main:hover .ic-t,button.ic-main:hover .ic-t{text-decoration:underline;text-underline-offset:3px}
+.ic-media{position:relative;display:block;aspect-ratio:16/9;max-width:100%;background:var(--wall);overflow:hidden}
+.ic-media img{width:100%;height:100%;object-fit:cover;display:block}
+.ic-play{position:absolute;inset:0;margin:auto;width:52px;height:52px;border-radius:50%;background:rgba(0,0,0,.62);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;padding-left:3px}
+.ic-body{display:flex;flex-direction:column;gap:2px;padding:12px 14px 14px;min-width:0}
+.ic-k{font-size:11px;letter-spacing:.14em;color:var(--muted)}
+.ic-t{font-family:var(--serif);font-weight:500;font-size:15px;line-height:1.45;overflow-wrap:anywhere}
+.ic-s{font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
+.ic-memo{font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere;margin-top:4px;line-height:1.65}
+.ic-tools{display:flex;gap:2px;border-top:1px solid var(--line);padding:4px 6px}
+.ic-tools button{background:none;border:0;font-size:12.5px;color:var(--muted);padding:4px 8px;border-radius:4px}
+.ic-tools button:hover:not(:disabled){background:var(--wall);color:var(--ink)}
+.ic-tools .sp{flex:1}
+.seg2{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px}
+.seg2 button{border:1px solid var(--line-strong);background:var(--panel);border-radius:999px;padding:5px 12px;font-size:13px}
+.seg2 button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{border:1px solid var(--line);background:var(--wall);border-radius:999px;padding:3px 10px;font-size:12.5px}
+.fform{display:flex;flex-direction:column;gap:8px;flex-basis:100%}
+.player{background:#000;width:100%;max-width:1000px;border-radius:6px;overflow:hidden}
+.pl-frame{aspect-ratio:16/9;max-width:100%}
+.pl-frame iframe{width:100%;height:100%;border:0;display:block}
+.pl-cap{background:var(--panel);padding:12px 16px;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between}
+.pl-cap b{font-family:var(--serif);font-weight:500;font-size:16px;overflow-wrap:anywhere}
+.pl-cap a{color:var(--accent);font-size:13px}
 @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 @keyframes hang{0%{opacity:0;transform:translateY(-16px)}70%{opacity:1;transform:translateY(2px)}100%{opacity:1;transform:none}}
 @keyframes drop{0%{opacity:0;transform:translateY(-32px) scale(.96)}60%{opacity:1;transform:translateY(4px) scale(1)}100%{opacity:1;transform:none}}
@@ -251,7 +279,7 @@ img.fi.ok{opacity:1}
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInAnonymously, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, onSnapshot, serverTimestamp, deleteField, writeBatch, arrayUnion } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -273,7 +301,7 @@ if(wantTeacher){try{localStorage.removeItem(KEY_STORE)}catch{}}
 else if(urlKey)lsSet(KEY_STORE,urlKey);
 if(urlKey||wantTeacher)history.replaceState(null,'',location.pathname);
 
-const S={user:null,role:null,settings:null,me:null,join:null,year:null,view:'home',board:null,student:null,boards:[],works:[],subs:[],setSub:null};
+const S={user:null,role:null,settings:null,me:null,join:null,year:null,view:'home',board:null,student:null,boards:[],works:[],subs:[],setSub:null,featured:[],featNames:{},items:[],topic:null};
 const uid=()=>S.user?.uid;
 const roster=()=>S.settings?.roster||[];
 const nameOf=no=>roster()[no-1]||'';
@@ -366,6 +394,13 @@ function subscribe(){
   S.subs.push(onSnapshot(wq,q=>{
     if(S.worksLoaded)q.docChanges().forEach(c=>{if(c.type==='added')SHOWN.set(c.doc.id,{t:performance.now(),d:0,k:'drop'})});S.worksLoaded=true;
     S.works=q.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>toMs(b.createdAt)-toMs(a.createdAt));render();if($('.lb'))drawWork()},onErr));
+  const soft=e=>console.error(e);
+  S.subs.push(onSnapshot(query(collection(db,'items'),where('year','==',S.year)),q=>{
+    S.items=q.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.order||0)-(b.order||0));render();if(ctx.mode==='ref'&&$('.lb'))drawWork()},soft));
+  S.subs.push(onSnapshot(collection(db,'featured'),q=>{
+    S.featured=q.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>b.year-a.year||toMs(a.createdAt)-toMs(b.createdAt));render();if($('.lb'))drawWork()},soft));
+  if(S.role==='teacher')S.subs.push(onSnapshot(query(collection(db,'works'),where('featured','==',true)),q=>{
+    S.featNames={};q.docs.forEach(d=>{const x=d.data();S.featNames[d.id]={no:x.no,name:x.name}});render();if(ctx.mode==='feat'&&$('.lb'))drawWork()},soft));
   render();
 }
 
@@ -382,8 +417,9 @@ function render(){
   $('#adminBtn').hidden=S.role!=='teacher';
   const cur=S.year===S.settings.year;
   if(S.view==='board'&&!S.boards.find(b=>b.id===S.board))S.view='home';
-  const key=`${S.view}|${S.board}|${S.student}|${S.year}`;if(key!==viewKey){viewKey=key;SHOWN.clear()}
-  main.innerHTML=S.view==='board'?boardView():S.view==='student'?studentView():homeView();
+  if(S.view==='topic'&&!S.featured.some(f=>f.topic===S.topic))S.view='home';
+  const key=`${S.view}|${S.board}|${S.student}|${S.year}|${S.topic}`;if(key!==viewKey){viewKey=key;SHOWN.clear()}
+  main.innerHTML=S.view==='board'?boardView():S.view==='student'?studentView():S.view==='topic'?topicView():homeView();
   $('#fab').hidden=!(S.view==='board'&&cur);
 }
 function homeView(){
@@ -392,32 +428,73 @@ function homeView(){
     return `<button class="room" data-board="${b.id}"${anim('r'+b.id,i)}><span class="cover"><span style="${cover?`background-image:url('${cover}')`:''}">${cover?'':'아직 작품이 없어요'}</span></span>
       <span><h3>${esc(b.title)}</h3><span class="meta">작품 ${ws.length}점${b.when?` · ${esc(b.when)}`:''}</span></span></button>`}).join('');
   const add=S.role==='teacher'&&cur?`<button class="room new" data-act="newBoard"${anim('rnew',S.boards.length)}><span class="cover"><span>＋ 새 전시실 만들기</span></span><span><h3 style="color:var(--muted)">새 전시실</h3><span class="meta">단원이나 주제별로</span></span></button>`:'';
-  const names=cur?roster():[...new Set(S.works.map(w=>w.no))].sort((a,b)=>a-b).map(no=>S.works.find(w=>w.no===no).name);
-  const nos=cur?roster().map((_,i)=>i+1):[...new Set(S.works.map(w=>w.no))].sort((a,b)=>a-b);
+  const names=cur?roster():[...new Set(S.works.map(w=>w.no))].filter(n=>n>0).sort((a,b)=>a-b).map(no=>S.works.find(w=>w.no===no).name);
+  const nos=cur?roster().map((_,i)=>i+1):[...new Set(S.works.map(w=>w.no))].filter(n=>n>0).sort((a,b)=>a-b);
   const rosterHtml=nos.map((no,i)=>`<button data-stu="${no}"${anim('s'+no,i+4)}><b>${no}</b><span>${esc(names[i])}</span><span class="c">${S.works.filter(w=>w.no===no).length}점</span></button>`).join('');
   const emptyRooms=!S.boards.length&&!add?`<div class="empty">아직 전시실이 없어요. 선생님이 전시실을 만들면 여기에 나타나요.</div>`:'';
   return `<section class="sec"><div class="sechead"${anim('head',0,'rise')}><div><p class="eyebrow">${S.year}학년도 전시실</p><h1>${cur?'우리 반 작품들':'지난 학년 작품들'}</h1></div>
     <span class="meta">${S.boards.length}개 전시실 · 작품 ${S.works.length}점</span></div>
-    ${emptyRooms}<div class="rooms">${rooms}${add}</div></section>
+    ${emptyRooms}<div class="rooms">${rooms}${add}</div></section>${featSection()}
     ${nos.length?`<section class="sec"><div class="sechead"${anim('head2',4,'rise')}><h2>학생별 모아보기</h2><span class="meta">번호를 누르면 그 학생의 작품만 모여요</span></div><div class="roster">${rosterHtml}</div></section>`:''}`;
 }
 function frame(w,showBoard,idx=0){
   const b=S.boards.find(x=>x.id===w.boardId);const n=likeCount(w);
-  return `<button class="frame${w.hidden?' hid':''}" data-work="${w.id}" aria-label="${esc(w.title)}, ${w.no}번 ${esc(w.name)}"${anim(w.id,idx)}>
+  return `<button class="frame${w.hidden?' hid':''}" data-work="${w.id}" aria-label="${esc(w.title)}${w.no?`, ${w.no}번 ${esc(w.name)}`:''}"${anim(w.id,idx)}>
     <span class="mat"><img src="${esc(w.photos[0].thumb)}" alt="" loading="lazy" ${imgCls(w.photos[0].thumb)} ${w.photos[0].w?`width="${w.photos[0].w}" height="${w.photos[0].h}"`:''}></span>
     <span class="cap"><span class="t">${esc(w.title)}</span>
-    <span class="n"><span>${showBoard?esc(b?.title||''):`${w.no}번 ${esc(w.name)}`}</span>${n?`<span class="h">♥ ${n}</span>`:''}${w.photos.length>1?`<span class="badge">사진 ${w.photos.length}</span>`:''}${w.hidden?'<span class="badge">숨김</span>':''}</span></span></button>`;
+    <span class="n"><span>${showBoard?esc(b?.title||''):w.no?`${w.no}번 ${esc(w.name)}`:''}</span>${n?`<span class="h">♥ ${n}</span>`:''}${w.photos.length>1?`<span class="badge">사진 ${w.photos.length}</span>`:''}${w.featured&&S.role==='teacher'?'<span class="badge">대표</span>':''}${w.hidden?'<span class="badge">숨김</span>':''}</span></span></button>`;
 }
 function boardView(){
   const b=S.boards.find(x=>x.id===S.board);const ws=boardWorks(b.id);const cur=S.year===S.settings.year;
   const body=ws.length?`<div class="wall">${ws.map((w,i)=>frame(w,false,i)).join('')}</div>`:
     `<div class="empty"><h2>아직 걸린 작품이 없어요</h2><span>첫 작품을 올리면 이 벽에 걸려요.</span>${cur?'<button class="btn primary" data-act="upload">작품 올리기</button>':''}</div>`;
-  const tActs=S.role==='teacher'?`<button class="btn" data-act="editBoard">전시실 이름 고치기</button>`:'';
+  const tActs=S.role==='teacher'?`<button class="btn" data-act="editBoard">전시실 이름 고치기</button>${cur?'<button class="btn" data-act="addItem">＋ 자료 넣기</button>':''}`:'';
+  const its=itemsSection(b.id);
   return `<button class="back" data-act="home">← 전시실로</button>
     <div class="boardhead"${anim('head',0,'rise')}><div><p class="eyebrow">${b.when?esc(b.when)+' · ':''}작품 ${ws.length}점</p><h1>${esc(b.title)}</h1></div>
-    <div class="actions">${tActs}${ws.length?'<button class="btn" data-act="expo">▶ 전시 모드</button>':''}${cur?'<button class="btn primary" data-act="upload">＋ 작품 올리기</button>':''}</div></div>${body}`;
+    <div class="actions">${tActs}${expoList().length?'<button class="btn" data-act="expo">▶ 전시 모드</button>':''}${cur?'<button class="btn primary" data-act="upload">＋ 작품 올리기</button>':''}</div></div>${its}${its?`<div class="sechead"><h2>작품</h2><span class="meta">${ws.length}점</span></div>`:''}${body}`;
 }
 function studentList(){return S.works.filter(w=>w.no===S.student)}
+
+/* 자료 */
+const boardItems=id=>S.items.filter(x=>x.boardId===id);
+const ytId=u=>{const m=String(u).match(/(?:youtu\.be\/|[?&]v=|\/shorts\/|\/embed\/|\/live\/)([\w-]{11})/);return m?m[1]:null};
+const host=u=>{try{return new URL(u).hostname.replace(/^www\./,'')}catch{return ''}};
+const fsize=n=>n>=1048576?(n/1048576).toFixed(1)+'MB':Math.max(1,Math.round((n||0)/1024))+'KB';
+const KIND={link:'링크',youtube:'영상',file:'파일',image:'참고 이미지',memo:'메모'};
+function itemCard(x,i,n){const t=S.role==='teacher'&&S.year===S.settings.year;
+  const body=(sub,extra='')=>`<span class="ic-body"><span class="ic-k">${KIND[x.type]}</span>${x.title?`<span class="ic-t">${esc(x.title)}</span>`:''}${sub?`<span class="ic-s">${esc(sub)}</span>`:''}${extra}</span>`;
+  let main;
+  if(x.type==='youtube')main=`<button class="ic-main" data-play="${x.id}"><span class="ic-media"><img src="https://img.youtube.com/vi/${esc(x.vid)}/hqdefault.jpg" alt="" loading="lazy" ${imgCls(`https://img.youtube.com/vi/${x.vid}/hqdefault.jpg`)}><span class="ic-play" aria-hidden="true">▶</span></span>${body(x.note)}</button>`;
+  else if(x.type==='image')main=`<button class="ic-main" data-ref="${x.id}"><span class="ic-media"><img src="${esc(x.photos[0].thumb)}" alt="" loading="lazy" ${imgCls(x.photos[0].thumb)}></span>${body(x.note)}</button>`;
+  else if(x.type==='file'){const ext=(x.fileName||'').split('.').pop().toUpperCase();
+    main=`<a class="ic-main" href="${esc(x.url)}" target="_blank" rel="noopener">${body(`${ext} · ${fsize(x.size)}${x.note?' · '+x.note:''}`)}</a>`}
+  else if(x.type==='link')main=`<a class="ic-main" href="${esc(x.url)}" target="_blank" rel="noopener">${body(`${host(x.url)}${x.note?' · '+x.note:''}`)}</a>`;
+  else main=`<div class="ic-main">${body('',`<span class="ic-memo">${esc(x.text)}</span>`)}</div>`;
+  const tools=t?`<div class="ic-tools"><button data-mv="${x.id}" data-d="-1" ${i===0?'disabled':''} aria-label="앞으로">←</button><button data-mv="${x.id}" data-d="1" ${i===n-1?'disabled':''} aria-label="뒤로">→</button><span class="sp"></span><button data-edit="${x.id}">고치기</button></div>`:'';
+  return `<div class="ic" data-item="${x.id}"${anim('i'+x.id,i,'rise')}>${main}${tools}</div>`}
+function itemsSection(bid){const xs=boardItems(bid);if(!xs.length)return '';
+  return `<div class="sechead"${anim('ihead',1,'rise')}><h2>자료</h2><span class="meta">${xs.length}개</span></div><div class="items">${xs.map((x,i)=>itemCard(x,i,xs.length)).join('')}</div>`}
+
+/* 대표 작품실 */
+function topics(){const m=new Map();S.featured.forEach(f=>{if(!m.has(f.topic))m.set(f.topic,[]);m.get(f.topic).push(f)});return [...m.entries()].sort((a,b)=>a[0].localeCompare(b[0],'ko'))}
+const topicList=()=>S.featured.filter(f=>f.topic===S.topic);
+const yrRange=ys=>ys.length>1?`${ys[0]}–${ys[ys.length-1]}`:`${ys[0]}`;
+function featSection(){const ts=topics();if(!ts.length)return '';
+  return `<section class="sec"><div class="sechead"${anim('head3',3,'rise')}><div><p class="eyebrow">해마다 선생님이 고른 예시 작품</p><h2>대표 작품실</h2></div><span class="meta">${ts.length}개 주제 · 작품 ${S.featured.length}점</span></div>
+  <div class="rooms">${ts.map(([t,fs],i)=>{const ys=[...new Set(fs.map(f=>f.year))].sort();
+    return `<button class="room" data-topic="${esc(t)}"${anim('t'+t,i+3)}><span class="cover"><span style="background-image:url('${esc(fs[0].photos[0].thumb)}')"></span></span><span><h3>${esc(t)}</h3><span class="meta">작품 ${fs.length}점 · ${yrRange(ys)}학년도</span></span></button>`}).join('')}</div></section>`}
+function featFrame(f,i){const nm=S.role==='teacher'&&S.featNames[f.id];const p=f.photos[0];
+  return `<button class="frame" data-work="${f.id}" aria-label="${esc(f.title)}, ${f.year}학년도"${anim(f.id,i)}><span class="mat"><img src="${esc(p.thumb)}" alt="" loading="lazy" ${imgCls(p.thumb)} ${p.w?`width="${p.w}" height="${p.h}"`:''}></span>
+    <span class="cap"><span class="t">${esc(f.title)}</span><span class="n"><span>${f.year}학년도${nm&&nm.no?` · ${nm.no}번 ${esc(nm.name)}`:''}</span></span></span></button>`}
+function topicView(){const fs=topicList();const ys=[...new Set(fs.map(f=>f.year))].sort((a,b)=>b-a);let k=0;
+  return `<button class="back" data-act="home">← 전시실로</button>
+    <div class="boardhead"${anim('head',0,'rise')}><div><p class="eyebrow">대표 작품실 · ${yrRange([...ys].reverse())}학년도 · 작품 ${fs.length}점</p><h1>${esc(S.topic)}</h1></div>
+    <div class="actions"><button class="btn" data-act="expo">▶ 전시 모드</button></div></div>
+    ${ys.map(y=>{const g=fs.filter(f=>f.year===y);return `<div class="sechead"><h2>${y}학년도</h2><span class="meta">${g.length}점</span></div><div class="wall" style="margin-bottom:36px">${g.map(f=>featFrame(f,k++)).join('')}</div>`}).join('')}`}
+function expoList(){
+  if(S.view==='topic')return topicList();
+  return [...boardItems(S.board).filter(x=>x.type==='image').map(x=>({id:x.id,photos:x.photos,title:x.title||'참고 이미지',desc:x.note||'',no:0,name:''})),...boardWorks(S.board).filter(w=>!w.hidden)]}
 function studentView(){
   const ws=studentList();const name=ws[0]?.name||nameOf(S.student);
   return `<button class="back" data-act="home">← 전시실로</button>
@@ -434,22 +511,45 @@ function openLayer(html,cls='sheet',kind=''){const ov=$('#ov');
 function closeLayer(){ctx.csub&&ctx.csub();ctx.csub=null;const id=ctx.id;ctx.id=null;const ov=$('#ov');
   if(!ov){$('#layer').innerHTML='';return}
   ov.removeAttribute('id');ov.classList.remove('in');ov.classList.add('out');
-  const lb=ov.querySelector('.lb'),fr=id&&document.querySelector(`[data-work="${id}"] .mat`);
+  const lb=ov.querySelector('.lb'),fr=id&&document.querySelector(`[data-work="${id}"] .mat,[data-item="${id}"] .ic-media`);
   if(lb&&fr)flip(lb,fr.getBoundingClientRect(),true);
   setTimeout(()=>ov.remove(),240)}
-const currentList=()=>S.view==='student'?studentList():boardWorks(S.board);
-function openWork(id,dir=0){
-  ctx.csub&&ctx.csub();ctx.id=id;ctx.photo=0;ctx.confirm=false;ctx.comments=[];ctx.dir=dir;
-  const fr=!dir&&document.querySelector(`[data-work="${id}"] .mat`);const from=fr&&fr.getBoundingClientRect();
+const currentList=()=>ctx.mode==='ref'?[]:S.view==='topic'?topicList():S.view==='student'?studentList():boardWorks(S.board);
+function openWork(id,dir=0,mode){
+  ctx.csub&&ctx.csub();ctx.csub=null;ctx.id=id;ctx.photo=0;ctx.confirm=false;ctx.feat=false;ctx.comments=[];ctx.dir=dir;
+  ctx.mode=mode||(S.view==='topic'?'feat':'work');
+  const fr=!dir&&document.querySelector(`[data-work="${id}"] .mat,[data-item="${id}"] .ic-media`);const from=fr&&fr.getBoundingClientRect();
   drawWork();
   if(from&&$('.lb'))flip($('.lb'),from);
-  ctx.csub=onSnapshot(collection(db,'works',id,'comments'),q=>{ctx.comments=q.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>toMs(a.createdAt)-toMs(b.createdAt));drawWork()},()=>{});
+  if(ctx.mode==='work')ctx.csub=onSnapshot(collection(db,'works',id,'comments'),q=>{ctx.comments=q.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>toMs(a.createdAt)-toMs(b.createdAt));drawWork()},()=>{});
 }
+function stageHtml(w){const ph=w.photos[Math.min(ctx.photo,w.photos.length-1)];
+  return `<div class="stage"><div class="mat"><img src="${esc(ph.url)}" alt="${esc(w.title)}"></div>
+    ${w.photos.length>1?`<div class="thumbs">${w.photos.map((p,k)=>`<button data-ph="${k}" aria-pressed="${k===ctx.photo}" style="background-image:url('${esc(p.thumb)}')" aria-label="사진 ${k+1}"></button>`).join('')}</div>`:''}</div>`}
+const navHtml=(i,n)=>`<div class="nav"><button class="btn sm" data-act="prev" ${i===0?'disabled':''}>← 이전</button><span class="meta">${i+1} / ${n}</span><button class="btn sm" data-act="next" ${i===n-1?'disabled':''}>다음 →</button></div>`;
+function afterDraw(){if(ctx.dir){const m=$('.lb .stage .mat');if(m){m.style.setProperty('--dx',(ctx.dir*48)+'px');m.classList.add('slide')}ctx.dir=0}}
+function featForm(def){const ts=topics().map(([t])=>t);
+  return `<form class="fform" id="fform"><label for="ftopic" class="meta">대표 작품실 주제</label>
+    <div class="addc"><input type="text" id="ftopic" maxlength="24" value="${esc(def)}"><button class="btn sm primary">${ctx.mode==='feat'?'바꾸기':'걸기'}</button><button type="button" class="btn sm" data-act="featno">취소</button></div>
+    ${ts.length?`<div class="chips">${ts.map(t=>`<button type="button" data-tchip="${esc(t)}">${esc(t)}</button>`).join('')}</div>`:''}<span class="err" id="ferr"></span></form>`}
+function drawFeat(){const list=currentList();const i=list.findIndex(f=>f.id===ctx.id);if(i<0){closeLayer();return}
+  const f=list[i];const t=S.role==='teacher';const nm=t&&S.featNames[f.id];const fv=$('#ftopic')?.value;
+  openLayer(`<button class="x" data-act="close" aria-label="닫기">×</button>${stageHtml(f)}
+    <div class="info"><p class="eyebrow" style="margin:0">대표 작품실 · ${esc(f.topic)}</p>
+      <div><h2>${esc(f.title)}</h2><p class="meta" style="margin:4px 0 0">${f.year}학년도${nm&&nm.no?` · ${nm.no}번 ${esc(nm.name)}`:''}${f.boardTitle?` · ${esc(f.boardTitle)}`:''}</p></div>
+      ${f.desc?`<p class="desc">${esc(f.desc)}</p>`:''}
+      ${t?`<div class="tadmin">${ctx.feat?featForm(f.topic):`<button class="btn sm" data-act="feat">주제 바꾸기</button><button class="btn sm danger" data-act="unfeat">대표 작품에서 빼기</button>`}</div>`:''}
+      ${navHtml(i,list.length)}</div>`,'lb');
+  if(fv!=null&&$('#ftopic'))$('#ftopic').value=fv;afterDraw()}
+function drawRef(){const x=S.items.find(i=>i.id===ctx.id);if(!x||x.type!=='image'){closeLayer();return}
+  openLayer(`<button class="x" data-act="close" aria-label="닫기">×</button>${stageHtml({photos:x.photos,title:x.title})}
+    <div class="info"><p class="eyebrow" style="margin:0">참고 이미지</p>${x.title?`<h2>${esc(x.title)}</h2>`:''}${x.note?`<p class="desc">${esc(x.note)}</p>`:''}</div>`,'lb');afterDraw()}
+
 function drawWork(){
-  if(!ctx.id)return;const list=currentList();const i=list.findIndex(w=>w.id===ctx.id);
+  if(!ctx.id)return;if(ctx.mode==='feat')return drawFeat();if(ctx.mode==='ref')return drawRef();const list=currentList();const i=list.findIndex(w=>w.id===ctx.id);
   if(i<0){closeLayer();return}
   const w=list[i];const b=S.boards.find(x=>x.id===w.boardId);const t=S.role==='teacher';
-  const prevVal=$('#cinput')?.value||'';const hadFocus=document.activeElement?.id==='cinput';
+  const prevVal=$('#cinput')?.value||'';const fv=$('#ftopic')?.value;const hadFocus=document.activeElement?.id==='cinput';
   const liked=!!w.likes?.[uid()];
   const cm=ctx.comments.map(c=>`<div class="cmt"><span>${esc(c.text)}</span><span style="display:flex;gap:8px"><i>${c.teacher?'선생님':`${c.no}번 ${esc(c.name)}`}</i>${t?`<button class="del" data-delc="${c.id}">지우기</button>`:''}</span></div>`).join('');
   const cur=w.year===S.settings.year;const canC=cur&&(t||S.settings.commentsOn!==false);
@@ -459,17 +559,17 @@ function drawWork(){
       ${w.photos.length>1?`<div class="thumbs">${w.photos.map((p,k)=>`<button data-ph="${k}" aria-pressed="${k===ctx.photo}" style="background-image:url('${esc(p.thumb)}')" aria-label="사진 ${k+1}"></button>`).join('')}</div>`:''}</div>
     <div class="info">
       <p class="eyebrow" style="margin:0">${esc(b?.title||'')}</p>
-      <div><h2>${esc(w.title)}</h2><p class="meta" style="margin:4px 0 0">${w.no}번 ${esc(w.name)}</p></div>
+      <div><h2>${esc(w.title)}</h2>${w.no?`<p class="meta" style="margin:4px 0 0">${w.no}번 ${esc(w.name)}</p>`:''}</div>
       ${w.desc?`<p class="desc">${esc(w.desc)}</p>`:''}
       <button class="heart${performance.now()-(ctx.popT||0)<380?' pop':''}" style="animation-delay:-${Math.round(performance.now()-(ctx.popT||0))}ms" data-act="heart" aria-pressed="${liked}" ${cur&&!w.hidden?'':'disabled'}>${liked?'♥':'♡'} ${likeCount(w)}</button>
       <div class="cmts"><strong style="font-weight:500;font-size:14px">한 줄 감상 ${ctx.comments.length}</strong>${cm||'<span class="meta">첫 감상을 남겨 보세요.</span>'}
         ${canC?`<form class="addc" id="cform"><input type="text" id="cinput" maxlength="40" placeholder="${t?'선생님 한마디':'좋았던 점을 한 줄로'}" aria-label="한 줄 감상"><button class="btn sm primary">남기기</button></form><span class="err" id="cerr"></span>`:
         `<p class="note">${cur?'선생님이 감상 남기기를 잠시 꺼두었어요.':'지난 학년 작품에는 감상을 남길 수 없어요.'}</p>`}</div>
       ${t?`<div class="tadmin">${ctx.confirm?`<div class="confirm">이 작품을 삭제할까요? 사진과 감상이 모두 지워지고 되돌릴 수 없어요. <button class="btn sm danger" data-act="delyes">삭제</button><button class="btn sm" data-act="delno">취소</button></div>`:
-        `<button class="btn sm" data-act="hide">${w.hidden?'다시 보이기':'숨기기'}</button><button class="btn sm danger" data-act="del">삭제</button>`}</div>`:''}
+        ctx.feat?featForm(b?.title||''):`${w.featured?`<p class="meta" style="flex-basis:100%;margin:0">대표 작품실 · ${esc(w.topic||'')}</p><button class="btn sm" data-act="unfeat">대표 작품에서 빼기</button>`:'<button class="btn sm" data-act="feat">대표 작품으로</button>'}<button class="btn sm" data-act="hide">${w.hidden?'다시 보이기':'숨기기'}</button><button class="btn sm danger" data-act="del">삭제</button>`}</div>`:''}
       <div class="nav"><button class="btn sm" data-act="prev" ${i===0?'disabled':''}>← 이전</button><span class="meta">${i+1} / ${list.length}</span><button class="btn sm" data-act="next" ${i===list.length-1?'disabled':''}>다음 →</button></div>
     </div>`,'lb');
-  const ci=$('#cinput');if(ci){ci.value=prevVal;if(hadFocus)ci.focus()}
+  const ci=$('#cinput');if(ci){ci.value=prevVal;if(hadFocus)ci.focus()}if(fv!=null&&$('#ftopic'))$('#ftopic').value=fv;
   if(ctx.dir){const m=$('.lb .stage .mat');m.style.setProperty('--dx',(ctx.dir*48)+'px');m.classList.add('slide');ctx.dir=0}
 }
 function step(d){const list=currentList();const i=list.findIndex(w=>w.id===ctx.id)+d;if(i>=0&&i<list.length)openWork(list[i].id,d)}
@@ -484,10 +584,10 @@ function drawUpload(err=''){
     return p?`<div class="slot filled" style="background-image:url('${p.preview}')"><button class="rm" data-rm="${k}" aria-label="${label} 사진 빼기">×</button></div>`:
     `<label class="slot"><input type="file" accept="image/*" data-slot="${k}" ${k>up.photos.length?'disabled':''} aria-label="${label} 사진"><span style="font-size:20px">＋</span><span>${label}${k?' (선택)':''}</span></label>`}).join('');
   openLayer(`<button class="x" data-act="close" aria-label="닫기">×</button>
-    <h2>작품 올리기</h2><p class="sub">${S.role==='teacher'?'선생님이 학생 대신 올려요':`올리는 사람: ${S.me.no}번 ${esc(S.me.name)}`}</p>
+    <h2>작품 올리기</h2><p class="sub">${S.role==='teacher'?'학생을 고르면 그 학생 작품으로 걸려요. 고르지 않으면 이름 없이 걸려요.':`올리는 사람: ${S.me.no}번 ${esc(S.me.name)}`}</p>
     <div class="field"><label>사진 (최대 3장, 첫 장이 벽에 걸려요)</label><div class="slots">${slots}</div></div>
     <div class="field"><label for="uboard">전시실</label><select id="uboard">${S.boards.map(b=>`<option value="${b.id}" ${b.id===up.board?'selected':''}>${esc(b.title)}</option>`).join('')}</select></div>
-    ${S.role==='teacher'?`<div class="field"><label for="uno">학생</label><select id="uno">${roster().map((n,i)=>`<option value="${i+1}" ${String(i+1)===no?'selected':''}>${i+1}번 ${esc(n)}</option>`).join('')}</select></div>`:''}
+    ${S.role==='teacher'?`<div class="field"><label for="uno">학생 (선택)</label><select id="uno"><option value="0">선택 안 함</option>${roster().map((n,i)=>`<option value="${i+1}" ${String(i+1)===no?'selected':''}>${i+1}번 ${esc(n)}</option>`).join('')}</select></div>`:''}
     <div class="field"><label for="utitle">작품 제목</label><input type="text" id="utitle" maxlength="30" value="${esc(t)}" placeholder="우리 동네 저녁"></div>
     <div class="field"><label for="udesc">작품 설명 (선택)</label><textarea id="udesc" maxlength="120" placeholder="어떤 점을 표현하려고 했나요?">${esc(d)}</textarea></div>
     <span class="err" id="uerr">${esc(err)}</span>
@@ -577,17 +677,76 @@ function openBoardForm(edit){
   setTimeout(()=>$('#nbt')?.focus(),0);
 }
 
+/* ---------- 자료 넣기 ---------- */
+let itf={};
+function putFile(path,blob,meta,onp){return new Promise((res,rej)=>{const t=uploadBytesResumable(ref(st,path),blob,meta);
+  t.on('state_changed',x=>onp&&onp(x.bytesTransferred/x.totalBytes),rej,async()=>{try{res(await getDownloadURL(t.snapshot.ref))}catch(e){rej(e)}})})}
+async function ytTitle(url){try{const c=new AbortController();setTimeout(()=>c.abort(),4000);
+  const r=await fetch('https://www.youtube.com/oembed?format=json&url='+encodeURIComponent(url),{signal:c.signal});return (await r.json()).title||''}catch{return ''}}
+function openItemForm(id){const x=id?S.items.find(i=>i.id===id):null;
+  itf={id,type:x?(x.type==='youtube'?'link':x.type):'link',file:null,img:null,busy:false,confirm:false};$('#ov')?.remove();drawItemForm()}
+function drawItemForm(err=''){
+  const x=itf.id?S.items.find(i=>i.id===itf.id):null;const v=id=>$('#'+id)?.value;
+  const url=v('iurl')??x?.url??'',title=v('ititle')??x?.title??'',note=v('inote')??x?.note??'',memo=v('imemo')??x?.text??'';
+  const T=itf.type;
+  const seg=x?'':`<div class="seg2" role="group" aria-label="자료 종류">${[['link','링크·영상'],['file','파일'],['image','참고 이미지'],['memo','메모']].map(([k,l])=>`<button type="button" data-itype="${k}" aria-pressed="${T===k}">${l}</button>`).join('')}</div>`;
+  let body='';
+  if(T==='link')body=`<div class="field"><label for="iurl">주소</label><input type="text" id="iurl" inputmode="url" value="${esc(url)}" placeholder="https://www.youtube.com/watch?v=…"><span class="meta">유튜브 주소를 넣으면 이 페이지 안에서 바로 재생돼요.</span></div>`;
+  if(T==='file')body=x?`<p class="note" style="margin-bottom:16px">${esc(x.fileName)} · ${fsize(x.size)}</p>`:`<div class="field"><label for="ifile">파일 (50MB까지)</label><input type="file" id="ifile">${itf.file?`<span class="meta">${esc(itf.file.name)} · ${fsize(itf.file.size)}</span>`:''}</div>`;
+  if(T==='image'){const pv=x?x.photos[0].thumb:itf.img?.preview;
+    body=`<div class="field"><label for="iimg">${x?'이미지':'이미지 고르기'}</label>${pv?`<img src="${esc(pv)}" alt="" style="max-height:160px;width:auto;align-self:flex-start;border:1px solid var(--line)">`:''}${x?'':`<input type="file" id="iimg" accept="image/*">`}</div>`}
+  if(T==='memo')body=`<div class="field"><label for="imemo">내용</label><textarea id="imemo" rows="5" maxlength="600" placeholder="오늘의 활동 순서, 준비물 같은 안내">${esc(memo)}</textarea></div>`;
+  const del=x?(itf.confirm?`<div class="confirm">이 자료를 지울까요? <button class="btn sm danger" data-act="itemDelYes">지우기</button><button class="btn sm" data-act="itemDelNo">취소</button></div>`:'<button class="btn danger" data-act="itemDel">지우기</button>'):'<span></span>';
+  openLayer(`<button class="x" data-act="close" aria-label="닫기">×</button><h2>${x?'자료 고치기':'자료 넣기'}</h2><p class="sub">학생은 보기만 할 수 있어요.</p>${seg}${body}
+    <div class="field"><label for="ititle">제목 ${T==='memo'?'(선택)':'(비워 두면 자동으로)'}</label><input type="text" id="ititle" maxlength="40" value="${esc(title)}"></div>
+    ${T==='memo'?'':`<div class="field"><label for="inote">한 줄 설명 (선택)</label><input type="text" id="inote" maxlength="60" value="${esc(note)}"></div>`}
+    <span class="err" id="ierr">${esc(err)}</span>
+    <div class="actions" style="justify-content:space-between;margin-top:8px">${del}<span class="actions"><button class="btn" data-act="close">취소</button><button class="btn primary" data-act="saveItem" id="isave">${x?'저장':'넣기'}</button></span></div>`,'sheet','item');
+}
+async function saveItem(){
+  if(itf.busy)return;const T=itf.type;const x=itf.id?S.items.find(i=>i.id===itf.id):null;
+  const title=$('#ititle').value.trim(),note=$('#inote')?.value.trim()||'';const err=m=>{$('#ierr').textContent=m};
+  const btn=$('#isave');const busy=on=>{itf.busy=on;btn.disabled=on;btn.textContent=on?'저장하는 중…':(x?'저장':'넣기')};
+  let data;
+  if(T==='link'){let url=$('#iurl').value.trim();if(!url)return err('주소를 넣어 주세요.');if(!/^https?:\/\//i.test(url))url='https://'+url;
+    try{new URL(url)}catch{return err('주소를 다시 확인해 주세요.')}
+    busy(true);const vid=ytId(url);data={type:vid?'youtube':'link',url,vid:vid||null,title:title||(vid?await ytTitle(url)||'유튜브 영상':host(url)),note}}
+  else if(T==='memo'){const text=$('#imemo').value.trim();if(!text)return err('내용을 적어 주세요.');data={type:'memo',text,title,note:''}}
+  else if(x){data={title:title||x.title,note}}
+  else if(T==='file'){const f=itf.file;if(!f)return err('파일을 골라 주세요.');if(f.size>50*1048576)return err('50MB보다 작은 파일만 넣을 수 있어요.')}
+  else if(T==='image'){if(!itf.img)return err('이미지를 골라 주세요.')}
+  try{
+    busy(true);
+    if(x){await updateDoc(doc(db,'items',x.id),data)}
+    else{const r=doc(collection(db,'items'));
+      if(T==='file'){const f=itf.file;const ext=(f.name.split('.').pop()||'bin').replace(/[^\w]/g,'').slice(0,8);const path=`items/${r.id}.${ext}`;
+        const url=await putFile(path,f,{contentType:f.type||'application/octet-stream',contentDisposition:`inline; filename*=UTF-8''${encodeURIComponent(f.name)}`},q=>{btn.textContent=`올리는 중… ${Math.round(q*100)}%`});
+        data={type:'file',url,path,fileName:f.name,size:f.size,title:title||f.name.replace(/\.[^.]+$/,''),note}}
+      if(T==='image'){const p=itf.img;const base=`items/${r.id}`;
+        const url=await putFile(base+'.jpg',p.full.blob,{contentType:'image/jpeg'});const thumb=await putFile(base+'-t.jpg',p.thumb.blob,{contentType:'image/jpeg'});
+        data={type:'image',photos:[{url,thumb,path:base+'.jpg',thumbPath:base+'-t.jpg',w:p.thumb.w,h:p.thumb.h}],title,note}}
+      await setDoc(r,{...data,boardId:S.board,year:S.year,order:Date.now(),createdAt:serverTimestamp()})}
+    closeLayer();toast(x?'저장했어요':'자료를 넣었어요');
+  }catch(e){busy(false);fail(e)}
+}
+async function deleteItem(x){await deleteDoc(doc(db,'items',x.id));
+  const paths=x.type==='file'?[x.path]:x.type==='image'?[x.photos[0].path,x.photos[0].thumbPath]:[];
+  for(const p of paths){try{await deleteObject(ref(st,p))}catch{}}}
+function openPlayer(id){const x=S.items.find(i=>i.id===id);if(!x)return;
+  openLayer(`<div class="pl-frame"><iframe src="https://www.youtube-nocookie.com/embed/${esc(x.vid)}?autoplay=1&rel=0&playsinline=1" title="${esc(x.title)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>
+    <div class="pl-cap"><b>${esc(x.title)}</b><span class="actions"><a href="${esc(x.url)}" target="_blank" rel="noopener">유튜브에서 열기</a><button class="btn sm" data-act="close">닫기</button></span></div>`,'player','player')}
+
 /* ---------- 전시 모드 ---------- */
 let ex={list:[],i:0,timer:null,play:true};
-function openExpo(){ex.list=boardWorks(S.board).filter(w=>!w.hidden);if(!ex.list.length)return;ex.i=0;ex.play=true;
-  const b=S.boards.find(x=>x.id===S.board);
-  $('#layer').innerHTML=`<div class="expo" id="expo"><span class="room-t">${esc(b.title)}</span><span class="count" id="exc"></span>
+function openExpo(){ex.list=expoList();if(!ex.list.length)return;ex.i=0;ex.play=true;
+  const rt=S.view==='topic'?`대표 작품실 · ${S.topic}`:S.boards.find(x=>x.id===S.board)?.title||'';
+  $('#layer').innerHTML=`<div class="expo" id="expo"><span class="room-t">${esc(rt)}</span><span class="count" id="exc"></span>
     <div class="mat" id="exm"><img id="exi" alt=""></div><div class="plaque" id="exp"><h3 id="ext"></h3><p id="exn"></p></div>
     <div class="ctl"><button data-x="prev">이전</button><button data-x="play" id="explay">일시정지</button><button data-x="next">다음</button><button data-x="close">나가기</button></div></div>`;
   showExpo(false);tick();
   try{navigator.wakeLock?.request('screen').then(l=>ex.lock=l).catch(()=>{})}catch{}
 }
-function showExpo(anim=true){const w=ex.list[ex.i];const set=()=>{const im=$('#exi');im.classList.remove('kb');im.src=w.photos[0].url;void im.offsetWidth;im.classList.add('kb');$('#ext').textContent=w.title;$('#exn').textContent=`${w.no}번 ${w.name}${w.desc?' · '+w.desc:''}`;
+function showExpo(anim=true){const w=ex.list[ex.i];const set=()=>{const im=$('#exi');im.classList.remove('kb');im.src=w.photos[0].url;void im.offsetWidth;im.classList.add('kb');$('#ext').textContent=w.title;$('#exn').textContent=[w.no?`${w.no}번 ${w.name}`:'',S.view==='topic'&&w.year?`${w.year}학년도`:'',w.desc].filter(Boolean).join(' · ');
   $('#exc').textContent=`${ex.i+1} / ${ex.list.length}`;$('#exm').classList.remove('fade');$('#exp').classList.remove('fade')};
   if(anim){$('#exm').classList.add('fade');$('#exp').classList.add('fade');setTimeout(set,700)}else set();
   const nx=ex.list[(ex.i+1)%ex.list.length];if(nx){const pre=new Image();pre.src=nx.photos[0].url}}
@@ -624,6 +783,22 @@ document.addEventListener('click',async e=>{
   if(d.y){S.year=+d.y;S.view='home';subscribe();return}
   if(el.id==='adminBtn'){openAdmin();return}
   if(el.id==='fab'||a==='upload'){openUpload();return}
+  if(d.topic!==undefined){S.view='topic';S.topic=d.topic;render();scrollTo(0,0);return}
+  if(d.play){openPlayer(d.play);return}
+  if(d.ref){openWork(d.ref,0,'ref');return}
+  if(a==='addItem'){openItemForm(null);return}
+  if(d.edit){openItemForm(d.edit);return}
+  if(d.itype){itf.type=d.itype;drawItemForm();return}
+  if(a==='saveItem'){saveItem();return}
+  if(a==='itemDel'){itf.confirm=true;drawItemForm();return}
+  if(a==='itemDelNo'){itf.confirm=false;drawItemForm();return}
+  if(a==='itemDelYes'){const x=S.items.find(i=>i.id===itf.id);closeLayer();if(x){await deleteItem(x);toast('자료를 지웠어요')}return}
+  if(d.mv){const xs=boardItems(S.board);const i=xs.findIndex(x=>x.id===d.mv),j=i+(+d.d);if(j<0||j>=xs.length)return;
+    const b=writeBatch(db);b.update(doc(db,'items',xs[i].id),{order:xs[j].order||j});b.update(doc(db,'items',xs[j].id),{order:xs[i].order||i});await b.commit();return}
+  if(d.tchip!==undefined){const f=$('#ftopic');if(f){f.value=d.tchip;f.focus()}return}
+  if(a==='feat'){ctx.feat=true;drawWork();const f=$('#ftopic');if(f){f.focus();f.select()}return}
+  if(a==='featno'){ctx.feat=false;drawWork();return}
+  if(a==='unfeat'&&ctx.id){const id=ctx.id;const b=writeBatch(db);b.update(doc(db,'works',id),{featured:false,topic:deleteField()});b.delete(doc(db,'featured',id));await b.commit();toast('대표 작품에서 뺐어요');return}
   if(d.board){S.view='board';S.board=d.board;render();scrollTo(0,0);return}
   if(d.stu){S.view='student';S.student=+d.stu;render();scrollTo(0,0);return}
   if(d.work){openWork(d.work);return}
@@ -640,7 +815,7 @@ document.addEventListener('click',async e=>{
   if(a==='del'){ctx.confirm=true;drawWork();return}
   if(a==='delno'){ctx.confirm=false;drawWork();return}
   if(a==='delyes'&&w){
-    const cs=await getDocs(collection(db,'works',w.id,'comments'));const b=writeBatch(db);cs.docs.forEach(c=>b.delete(c.ref));b.delete(doc(db,'works',w.id));await b.commit();
+    const cs=await getDocs(collection(db,'works',w.id,'comments'));const b=writeBatch(db);cs.docs.forEach(c=>b.delete(c.ref));b.delete(doc(db,'works',w.id));b.delete(doc(db,'featured',w.id));await b.commit();
     for(const p of w.photos){for(const path of [p.path,p.thumbPath]){try{await deleteObject(ref(st,path))}catch{}}}
     closeLayer();toast('작품을 삭제했어요');return}
   if(d.delc&&ctx.id){await deleteDoc(doc(db,'works',ctx.id,'comments',d.delc));return}
@@ -653,7 +828,7 @@ document.addEventListener('click',async e=>{
     if(a==='mkBoard'){const r=doc(collection(db,'boards'));await setDoc(r,{year:S.settings.year,title:t,when,createdAt:serverTimestamp()});closeLayer();S.view='board';S.board=r.id;toast('새 전시실을 만들었어요')}
     else{await updateDoc(doc(db,'boards',S.board),{title:t,when});closeLayer();toast('저장했어요')}
     return}
-  if(a==='delBoard'){await deleteDoc(doc(db,'boards',S.board));closeLayer();S.view='home';render();toast('전시실을 지웠어요');return}
+  if(a==='delBoard'){for(const x of boardItems(S.board))await deleteItem(x);await deleteDoc(doc(db,'boards',S.board));closeLayer();S.view='home';render();toast('전시실을 지웠어요');return}
   if(a==='csw'){const on=S.settings.commentsOn===false;await updateDoc(doc(db,'settings','class'),{commentsOn:on});el.setAttribute('aria-checked',on);toast(on?'한 줄 감상을 켰어요':'한 줄 감상을 껐어요');return}
   if(a==='qrbig'||a==='tqrbig'){const t=a==='tqrbig';const ov=document.createElement('div');ov.className='bigqr';
     ov.innerHTML=`<h2>${t?'선생님용 접속':esc(S.settings.className)}</h2><img src="${qrData(t?teacherUrl():joinUrl(),10)}" alt="${t?'선생님용 접속 QR':'학생 입장 QR'}"><p style="margin:0;color:#444">${t?'선생님 휴대폰으로 찍고 구글 계정으로 로그인하세요':'휴대폰 카메라로 찍어서 들어오세요'}</p><button data-act="bigclose">닫기</button>`;document.body.appendChild(ov);return}
@@ -673,18 +848,33 @@ document.addEventListener('click',async e=>{
     S.year=y;S.view='home';closeLayer();subscribe();toast(`${y}학년도를 시작했어요. 새 QR을 학생들에게 보여 주세요`);return}
   }catch(err){fail(err)}
 });
-document.addEventListener('submit',async e=>{if(e.target.id!=='cform')return;e.preventDefault();const inp=$('#cinput');const v=inp.value.trim();
+document.addEventListener('submit',async e=>{
+  if(e.target.id==='fform'){e.preventDefault();const topic=$('#ftopic').value.trim();if(!topic){$('#ferr').textContent='주제를 적어 주세요.';return}
+    const id=ctx.id;
+    try{const b=writeBatch(db);
+      if(ctx.mode==='feat'){b.update(doc(db,'featured',id),{topic});b.update(doc(db,'works',id),{topic})}
+      else{const w=S.works.find(x=>x.id===id);const bd=S.boards.find(x=>x.id===w.boardId);
+        b.update(doc(db,'works',id),{featured:true,topic});
+        b.set(doc(db,'featured',id),{topic,year:w.year,title:w.title,desc:w.desc||'',boardTitle:bd?.title||'',photos:w.photos.map(p=>({url:p.url,thumb:p.thumb,w:p.w||null,h:p.h||null})),createdAt:serverTimestamp()})}
+      await b.commit();ctx.feat=false;if(S.view==='topic'&&ctx.mode==='feat')S.topic=topic;drawWork();toast(`대표 작품실 「${topic}」에 걸었어요`)}
+    catch(err){fail(err)}
+    return}
+  if(e.target.id!=='cform')return;e.preventDefault();const inp=$('#cinput');const v=inp.value.trim();
   if(!v){$('#cerr').textContent='감상을 한 줄 적어 주세요.';return}
   const data=S.role==='teacher'?{uid:uid(),no:0,name:'선생님',teacher:true,text:v,createdAt:serverTimestamp()}:{uid:uid(),no:S.me.no,name:S.me.name,text:v,createdAt:serverTimestamp()};
   inp.value='';try{await setDoc(doc(collection(db,'works',ctx.id,'comments')),data)}catch(err){inp.value=v;fail(err)}});
 document.addEventListener('input',e=>{if(e.target.id==='cinput'){const er=$('#cerr');er&&(er.textContent='')}});
-document.addEventListener('change',e=>{if(e.target.dataset?.slot===undefined||!e.target.files[0])return;up.board=$('#uboard')?.value||up.board;addPhoto(e.target.files[0])});
+document.addEventListener('change',async e=>{
+  if(e.target.id==='ifile'&&e.target.files[0]){itf.file=e.target.files[0];drawItemForm(itf.file.size>50*1048576?'50MB보다 작은 파일만 넣을 수 있어요.':'');return}
+  if(e.target.id==='iimg'&&e.target.files[0]){try{const im=await loadImage(e.target.files[0]);const full=await resized(im,1600,.85),thumb=await resized(im,640,.8);
+    itf.img={full,thumb,preview:URL.createObjectURL(thumb.blob)};drawItemForm()}catch{drawItemForm('이 이미지는 열 수 없어요.')}return}
+  if(e.target.dataset?.slot===undefined||!e.target.files[0])return;up.board=$('#uboard')?.value||up.board;addPhoto(e.target.files[0])});
 document.addEventListener('keydown',e=>{
   if($('.bigqr')&&e.key==='Escape'){$('.bigqr').remove();return}
   if($('#expo')){if(e.key==='Escape')closeExpo();if(e.key==='ArrowRight'||e.key==='ArrowLeft'){ex.i=(ex.i+(e.key==='ArrowRight'?1:-1)+ex.list.length)%ex.list.length;showExpo();tick()}return}
-  if(!$('#ov'))return;if(e.key==='Escape'&&!up.busy)closeLayer();
+  if(!$('#ov'))return;if(e.key==='Escape'&&!up.busy&&!itf.busy)closeLayer();
   if($('.lb')&&document.activeElement?.tagName!=='INPUT'){if(e.key==='ArrowRight')step(1);if(e.key==='ArrowLeft')step(-1)}});
-document.addEventListener('mousedown',e=>{if(e.target.id==='ov'&&!up.busy)closeLayer()});
+document.addEventListener('mousedown',e=>{if(e.target.id==='ov'&&!up.busy&&!itf.busy)closeLayer()});
 </script>
 </body>
 </html>
