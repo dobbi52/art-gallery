@@ -95,6 +95,7 @@ service cloud.firestore {
 
     function validNewWork(d) {
       return d.keys().hasOnly(['boardId','year','uid','no','name','title','desc','photos','likes','hidden','createdAt'])
+        && settings().get('uploadOpen', true) != false
         && d.uid == request.auth.uid
         && d.no == me().no
         && d.name == me().name

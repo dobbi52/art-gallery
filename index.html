@@ -54,6 +54,10 @@ header.top .inner{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;j
 .years{display:flex;gap:2px}
 .years button{background:none;border:0;border-bottom:2px solid transparent;padding:4px 8px;color:var(--muted);font-variant-numeric:tabular-nums}
 .years button[aria-pressed="true"]{color:var(--ink);border-bottom-color:var(--ink)}
+.openbtn .dot{width:8px;height:8px;border-radius:50%;background:var(--faint);display:inline-block}
+.openbtn[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+.openbtn[aria-pressed="true"] .dot{background:var(--accent)}
+.closed-note{font-size:13px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:6px 12px;align-self:center}
 .who{font-size:13px;color:var(--muted);padding:4px 10px;border:1px solid var(--line);border-radius:999px;white-space:nowrap}
 .btn{border:1px solid var(--line-strong);background:var(--panel);border-radius:4px;padding:8px 14px;font-size:14px;display:inline-flex;gap:6px;align-items:center;justify-content:center;white-space:nowrap}
 .btn:hover:not(:disabled){border-color:var(--ink)}
@@ -267,6 +271,7 @@ img.fi.ok{opacity:1}
   <div class="hright">
     <div class="years" id="years" role="group" aria-label="학년도"></div>
     <span class="who" id="who"></span>
+    <button class="btn sm openbtn" id="openBtn" hidden></button>
     <button class="btn sm" id="adminBtn" hidden>관리</button>
   </div>
 </div></header>
@@ -307,6 +312,8 @@ const roster=()=>S.settings?.roster||[];
 const nameOf=no=>roster()[no-1]||'';
 const toMs=t=>t?.toMillis?t.toMillis():Date.now();
 const likeCount=w=>Object.keys(w.likes||{}).length;
+const isOpen=()=>S.settings?.uploadOpen!==false;
+const canUpload=()=>S.role==='teacher'||isOpen();
 /* 움직임: 처음 보이는 것만 차례로 걸리고, 다시 그려도 이어서 움직여요 */
 const SHOWN=new Map();let viewKey='';
 function anim(id,idx=0,kind='hang'){const now=performance.now();let r=SHOWN.get(id);
@@ -415,12 +422,14 @@ function render(){
   $('#years').innerHTML=yrs.length>1?yrs.map(y=>`<button data-y="${y}" aria-pressed="${y===S.year}">${y}</button>`).join(''):'';
   $('#who').textContent=S.role==='teacher'?'선생님':`${S.me.no}번 ${S.me.name}`;
   $('#adminBtn').hidden=S.role!=='teacher';
+  const ob=$('#openBtn');ob.hidden=S.role!=='teacher';ob.setAttribute('aria-pressed',isOpen());
+  ob.innerHTML=`<span class="dot" aria-hidden="true"></span>학생 올리기 ${isOpen()?'열림':'닫힘'}`;
   const cur=S.year===S.settings.year;
   if(S.view==='board'&&!S.boards.find(b=>b.id===S.board))S.view='home';
   if(S.view==='topic'&&!S.featured.some(f=>f.topic===S.topic))S.view='home';
   const key=`${S.view}|${S.board}|${S.student}|${S.year}|${S.topic}`;if(key!==viewKey){viewKey=key;SHOWN.clear()}
   main.innerHTML=S.view==='board'?boardView():S.view==='student'?studentView():S.view==='topic'?topicView():homeView();
-  $('#fab').hidden=!(S.view==='board'&&cur);
+  $('#fab').hidden=!(S.view==='board'&&cur&&canUpload());
 }
 function homeView(){
   const cur=S.year===S.settings.year;
@@ -447,12 +456,12 @@ function frame(w,showBoard,idx=0){
 function boardView(){
   const b=S.boards.find(x=>x.id===S.board);const ws=boardWorks(b.id);const cur=S.year===S.settings.year;
   const body=ws.length?`<div class="wall">${ws.map((w,i)=>frame(w,false,i)).join('')}</div>`:
-    `<div class="empty"><h2>아직 걸린 작품이 없어요</h2><span>첫 작품을 올리면 이 벽에 걸려요.</span>${cur?'<button class="btn primary" data-act="upload">작품 올리기</button>':''}</div>`;
+    `<div class="empty"><h2>아직 걸린 작품이 없어요</h2><span>첫 작품을 올리면 이 벽에 걸려요.</span>${cur&&canUpload()?'<button class="btn primary" data-act="upload">작품 올리기</button>':''}</div>`;
   const tActs=S.role==='teacher'?`<button class="btn" data-act="editBoard">전시실 이름 고치기</button>${cur?'<button class="btn" data-act="addItem">＋ 자료 넣기</button>':''}`:'';
   const its=itemsSection(b.id);
   return `<button class="back" data-act="home">← 전시실로</button>
     <div class="boardhead"${anim('head',0,'rise')}><div><p class="eyebrow">${b.when?esc(b.when)+' · ':''}작품 ${ws.length}점</p><h1>${esc(b.title)}</h1></div>
-    <div class="actions">${tActs}${expoList().length?'<button class="btn" data-act="expo">▶ 전시 모드</button>':''}${cur?'<button class="btn primary" data-act="upload">＋ 작품 올리기</button>':''}</div></div>${its}${its?`<div class="sechead"><h2>작품</h2><span class="meta">${ws.length}점</span></div>`:''}${body}`;
+    <div class="actions">${tActs}${expoList().length?'<button class="btn" data-act="expo">▶ 전시 모드</button>':''}${cur&&canUpload()?'<button class="btn primary" data-act="upload">＋ 작품 올리기</button>':''}${cur&&!canUpload()?'<span class="closed-note">지금은 구경만 할 수 있어요</span>':''}</div></div>${its}${its?`<div class="sechead"><h2>작품</h2><span class="meta">${ws.length}점</span></div>`:''}${body}`;
 }
 function studentList(){return S.works.filter(w=>w.no===S.student)}
 
@@ -576,7 +585,7 @@ function step(d){const list=currentList();const i=list.findIndex(w=>w.id===ctx.i
 
 /* ---------- 올리기 ---------- */
 let up={photos:[],board:null,busy:false};
-function openUpload(){up={photos:[],board:S.view==='board'?S.board:S.boards[0]?.id,busy:false};
+function openUpload(){if(!canUpload()){toast('지금은 작품을 올릴 수 없어요');return}up={photos:[],board:S.view==='board'?S.board:S.boards[0]?.id,busy:false};
   if(!S.boards.length){toast('먼저 선생님이 전시실을 만들어야 해요');return}drawUpload()}
 function drawUpload(err=''){
   const t=$('#utitle')?.value??'',d=$('#udesc')?.value??'',no=$('#uno')?.value;
@@ -602,7 +611,7 @@ async function addPhoto(file){
   catch{drawUpload('이 사진은 열 수 없어요. 다른 사진을 골라 주세요.')}
 }
 async function submitUpload(){
-  if(up.busy)return;
+  if(up.busy)return;if(!canUpload()){closeLayer();toast('선생님이 올리기를 닫았어요');return}
   const title=$('#utitle').value.trim(),desc=$('#udesc').value.trim(),boardId=$('#uboard').value;
   if(!up.photos.length){drawUpload('사진을 한 장 이상 넣어 주세요.');return}
   
@@ -642,6 +651,7 @@ function drawAdmin(){
         <button class="btn sm" data-act="tqrbig">QR 보기</button></div>
       <div class="row"><div><strong>들어온 학생 ${adm.members.length}명</strong><p>번호를 잘못 고른 학생은 지우면 다시 고를 수 있어요.</p>
         <div class="mlist">${adm.members.map(m=>`<span>${m.no}번 ${esc(m.name)}<button data-delm="${m.id}" aria-label="${m.no}번 다시 고르게 하기">×</button></span>`).join('')||'<span style="padding-right:10px">아직 없어요</span>'}</div></div></div>
+      <div class="row"><div><strong>학생 작품 올리기</strong><p>닫으면 학생은 구경만 할 수 있어요. 위쪽 버튼으로도 바로 열고 닫을 수 있어요.</p></div><button class="switch" role="switch" data-act="osw" aria-checked="${isOpen()}" aria-label="학생 작품 올리기 열기"></button></div>
       <div class="row"><div><strong>한 줄 감상</strong><p>끄면 학생들이 새 감상을 남길 수 없어요.</p></div><button class="switch" role="switch" data-act="csw" aria-checked="${s.commentsOn!==false}" aria-label="한 줄 감상 켜기"></button></div>
       <div class="row"><div><strong>숨긴 작품 ${hid}점</strong><p>작품 창에서 다시 보이게 할 수 있어요.</p></div></div>
       <div class="row"><div><strong>미술관 이름과 반 명단</strong><p>${esc(s.className)} · ${s.year}학년도 · ${roster().length}명</p></div><button class="btn sm" data-act="editRoster">고치기</button></div>
@@ -782,6 +792,7 @@ document.addEventListener('click',async e=>{
   if(el.id==='home'||a==='home'){S.view='home';render();scrollTo(0,0);return}
   if(d.y){S.year=+d.y;S.view='home';subscribe();return}
   if(el.id==='adminBtn'){openAdmin();return}
+  if(el.id==='openBtn'||a==='osw'){const on=!isOpen();await updateDoc(doc(db,'settings','class'),{uploadOpen:on});if(a==='osw')el.setAttribute('aria-checked',on);toast(on?'학생들이 작품을 올릴 수 있어요':'학생 올리기를 닫았어요. 이제 구경만 할 수 있어요');return}
   if(el.id==='fab'||a==='upload'){openUpload();return}
   if(d.topic!==undefined){S.view='topic';S.topic=d.topic;render();scrollTo(0,0);return}
   if(d.play){openPlayer(d.play);return}
