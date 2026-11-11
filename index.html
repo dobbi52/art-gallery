@@ -439,9 +439,9 @@ function homeView(){
 }
 function frame(w,showBoard,idx=0){
   const b=S.boards.find(x=>x.id===w.boardId);const n=likeCount(w);
-  return `<button class="frame${w.hidden?' hid':''}" data-work="${w.id}" aria-label="${esc(w.title)}${w.no?`, ${w.no}번 ${esc(w.name)}`:''}"${anim(w.id,idx)}>
+  return `<button class="frame${w.hidden?' hid':''}" data-work="${w.id}" aria-label="${esc(w.title||'작품')}${w.no?`, ${w.no}번 ${esc(w.name)}`:''}"${anim(w.id,idx)}>
     <span class="mat"><img src="${esc(w.photos[0].thumb)}" alt="" loading="lazy" ${imgCls(w.photos[0].thumb)} ${w.photos[0].w?`width="${w.photos[0].w}" height="${w.photos[0].h}"`:''}></span>
-    <span class="cap"><span class="t">${esc(w.title)}</span>
+    <span class="cap">${w.title?`<span class="t">${esc(w.title)}</span>`:''}
     <span class="n"><span>${showBoard?esc(b?.title||''):w.no?`${w.no}번 ${esc(w.name)}`:''}</span>${n?`<span class="h">♥ ${n}</span>`:''}${w.photos.length>1?`<span class="badge">사진 ${w.photos.length}</span>`:''}${w.featured&&S.role==='teacher'?'<span class="badge">대표</span>':''}${w.hidden?'<span class="badge">숨김</span>':''}</span></span></button>`;
 }
 function boardView(){
@@ -485,8 +485,8 @@ function featSection(){const ts=topics();if(!ts.length)return '';
   <div class="rooms">${ts.map(([t,fs],i)=>{const ys=[...new Set(fs.map(f=>f.year))].sort();
     return `<button class="room" data-topic="${esc(t)}"${anim('t'+t,i+3)}><span class="cover"><span style="background-image:url('${esc(fs[0].photos[0].thumb)}')"></span></span><span><h3>${esc(t)}</h3><span class="meta">작품 ${fs.length}점 · ${yrRange(ys)}학년도</span></span></button>`}).join('')}</div></section>`}
 function featFrame(f,i){const nm=S.role==='teacher'&&S.featNames[f.id];const p=f.photos[0];
-  return `<button class="frame" data-work="${f.id}" aria-label="${esc(f.title)}, ${f.year}학년도"${anim(f.id,i)}><span class="mat"><img src="${esc(p.thumb)}" alt="" loading="lazy" ${imgCls(p.thumb)} ${p.w?`width="${p.w}" height="${p.h}"`:''}></span>
-    <span class="cap"><span class="t">${esc(f.title)}</span><span class="n"><span>${f.year}학년도${nm&&nm.no?` · ${nm.no}번 ${esc(nm.name)}`:''}</span></span></span></button>`}
+  return `<button class="frame" data-work="${f.id}" aria-label="${esc(f.title||'작품')}, ${f.year}학년도"${anim(f.id,i)}><span class="mat"><img src="${esc(p.thumb)}" alt="" loading="lazy" ${imgCls(p.thumb)} ${p.w?`width="${p.w}" height="${p.h}"`:''}></span>
+    <span class="cap">${f.title?`<span class="t">${esc(f.title)}</span>`:''}<span class="n"><span>${f.year}학년도${nm&&nm.no?` · ${nm.no}번 ${esc(nm.name)}`:''}</span></span></span></button>`}
 function topicView(){const fs=topicList();const ys=[...new Set(fs.map(f=>f.year))].sort((a,b)=>b-a);let k=0;
   return `<button class="back" data-act="home">← 전시실로</button>
     <div class="boardhead"${anim('head',0,'rise')}><div><p class="eyebrow">대표 작품실 · ${yrRange([...ys].reverse())}학년도 · 작품 ${fs.length}점</p><h1>${esc(S.topic)}</h1></div>
@@ -536,7 +536,7 @@ function drawFeat(){const list=currentList();const i=list.findIndex(f=>f.id===ct
   const f=list[i];const t=S.role==='teacher';const nm=t&&S.featNames[f.id];const fv=$('#ftopic')?.value;
   openLayer(`<button class="x" data-act="close" aria-label="닫기">×</button>${stageHtml(f)}
     <div class="info"><p class="eyebrow" style="margin:0">대표 작품실 · ${esc(f.topic)}</p>
-      <div><h2>${esc(f.title)}</h2><p class="meta" style="margin:4px 0 0">${f.year}학년도${nm&&nm.no?` · ${nm.no}번 ${esc(nm.name)}`:''}${f.boardTitle?` · ${esc(f.boardTitle)}`:''}</p></div>
+      <div><h2>${esc(f.title||`${f.year}학년도 작품`)}</h2><p class="meta" style="margin:4px 0 0">${f.year}학년도${nm&&nm.no?` · ${nm.no}번 ${esc(nm.name)}`:''}${f.boardTitle?` · ${esc(f.boardTitle)}`:''}</p></div>
       ${f.desc?`<p class="desc">${esc(f.desc)}</p>`:''}
       ${t?`<div class="tadmin">${ctx.feat?featForm(f.topic):`<button class="btn sm" data-act="feat">주제 바꾸기</button><button class="btn sm danger" data-act="unfeat">대표 작품에서 빼기</button>`}</div>`:''}
       ${navHtml(i,list.length)}</div>`,'lb');
@@ -559,7 +559,7 @@ function drawWork(){
       ${w.photos.length>1?`<div class="thumbs">${w.photos.map((p,k)=>`<button data-ph="${k}" aria-pressed="${k===ctx.photo}" style="background-image:url('${esc(p.thumb)}')" aria-label="사진 ${k+1}"></button>`).join('')}</div>`:''}</div>
     <div class="info">
       <p class="eyebrow" style="margin:0">${esc(b?.title||'')}</p>
-      <div><h2>${esc(w.title)}</h2>${w.no?`<p class="meta" style="margin:4px 0 0">${w.no}번 ${esc(w.name)}</p>`:''}</div>
+      <div><h2>${esc(w.title||(w.no?`${w.no}번 ${w.name}`:b?.title||'작품'))}</h2>${w.no&&w.title?`<p class="meta" style="margin:4px 0 0">${w.no}번 ${esc(w.name)}</p>`:''}</div>
       ${w.desc?`<p class="desc">${esc(w.desc)}</p>`:''}
       <button class="heart${performance.now()-(ctx.popT||0)<380?' pop':''}" style="animation-delay:-${Math.round(performance.now()-(ctx.popT||0))}ms" data-act="heart" aria-pressed="${liked}" ${cur&&!w.hidden?'':'disabled'}>${liked?'♥':'♡'} ${likeCount(w)}</button>
       <div class="cmts"><strong style="font-weight:500;font-size:14px">한 줄 감상 ${ctx.comments.length}</strong>${cm||'<span class="meta">첫 감상을 남겨 보세요.</span>'}
@@ -588,7 +588,7 @@ function drawUpload(err=''){
     <div class="field"><label>사진 (최대 3장, 첫 장이 벽에 걸려요)</label><div class="slots">${slots}</div></div>
     <div class="field"><label for="uboard">전시실</label><select id="uboard">${S.boards.map(b=>`<option value="${b.id}" ${b.id===up.board?'selected':''}>${esc(b.title)}</option>`).join('')}</select></div>
     ${S.role==='teacher'?`<div class="field"><label for="uno">학생 (선택)</label><select id="uno"><option value="0">선택 안 함</option>${roster().map((n,i)=>`<option value="${i+1}" ${String(i+1)===no?'selected':''}>${i+1}번 ${esc(n)}</option>`).join('')}</select></div>`:''}
-    <div class="field"><label for="utitle">작품 제목</label><input type="text" id="utitle" maxlength="30" value="${esc(t)}" placeholder="우리 동네 저녁"></div>
+    <div class="field"><label for="utitle">작품 제목 (선택)</label><input type="text" id="utitle" maxlength="30" value="${esc(t)}" placeholder="우리 동네 저녁"></div>
     <div class="field"><label for="udesc">작품 설명 (선택)</label><textarea id="udesc" maxlength="120" placeholder="어떤 점을 표현하려고 했나요?">${esc(d)}</textarea></div>
     <span class="err" id="uerr">${esc(err)}</span>
     <div class="actions" style="justify-content:flex-end;margin-top:8px"><button class="btn" data-act="close">취소</button><button class="btn primary" data-act="submit" id="usub">벽에 걸기</button></div>`,'sheet','upload');
@@ -605,7 +605,7 @@ async function submitUpload(){
   if(up.busy)return;
   const title=$('#utitle').value.trim(),desc=$('#udesc').value.trim(),boardId=$('#uboard').value;
   if(!up.photos.length){drawUpload('사진을 한 장 이상 넣어 주세요.');return}
-  if(!title){$('#uerr').textContent='작품 제목을 적어 주세요.';$('#utitle').focus();return}
+  
   const no=S.role==='teacher'?+$('#uno').value:S.me.no,name=S.role==='teacher'?nameOf(no):S.me.name;
   up.busy=true;const btn=$('#usub');btn.disabled=true;btn.textContent='올리는 중…';
   try{
@@ -746,7 +746,7 @@ function openExpo(){ex.list=expoList();if(!ex.list.length)return;ex.i=0;ex.play=
   showExpo(false);tick();
   try{navigator.wakeLock?.request('screen').then(l=>ex.lock=l).catch(()=>{})}catch{}
 }
-function showExpo(anim=true){const w=ex.list[ex.i];const set=()=>{const im=$('#exi');im.classList.remove('kb');im.src=w.photos[0].url;void im.offsetWidth;im.classList.add('kb');$('#ext').textContent=w.title;$('#exn').textContent=[w.no?`${w.no}번 ${w.name}`:'',S.view==='topic'&&w.year?`${w.year}학년도`:'',w.desc].filter(Boolean).join(' · ');
+function showExpo(anim=true){const w=ex.list[ex.i];const set=()=>{const im=$('#exi');im.classList.remove('kb');im.src=w.photos[0].url;void im.offsetWidth;im.classList.add('kb');$('#ext').textContent=w.title||(w.no?`${w.no}번 ${w.name}`:'');$('#exn').textContent=[w.no&&w.title?`${w.no}번 ${w.name}`:'',S.view==='topic'&&w.year?`${w.year}학년도`:'',w.desc].filter(Boolean).join(' · ');
   $('#exc').textContent=`${ex.i+1} / ${ex.list.length}`;$('#exm').classList.remove('fade');$('#exp').classList.remove('fade')};
   if(anim){$('#exm').classList.add('fade');$('#exp').classList.add('fade');setTimeout(set,700)}else set();
   const nx=ex.list[(ex.i+1)%ex.list.length];if(nx){const pre=new Image();pre.src=nx.photos[0].url}}
@@ -758,7 +758,7 @@ function printBook(){
   const ws=[...studentList()].filter(w=>!w.hidden).sort((a,b)=>toMs(a.createdAt)-toMs(b.createdAt));const name=ws[0]?.name||nameOf(S.student);
   const pa=$('#printArea');
   pa.innerHTML=`<section class="pp"><p>${esc(S.settings.className)} · ${S.year}학년도</p><h1>${S.student}번 ${esc(name)}의 작품집</h1><p>작품 ${ws.length}점</p></section>`+
-    ws.map(w=>{const b=S.boards.find(x=>x.id===w.boardId);return `<section class="pp"><img src="${esc(w.photos[0].url)}" alt=""><h2>${esc(w.title)}</h2><p>${esc(b?.title||'')}</p>${w.desc?`<p>${esc(w.desc)}</p>`:''}</section>`}).join('');
+    ws.map(w=>{const b=S.boards.find(x=>x.id===w.boardId);return `<section class="pp"><img src="${esc(w.photos[0].url)}" alt="">${w.title?`<h2>${esc(w.title)}</h2>`:''}<p>${esc(b?.title||'')}</p>${w.desc?`<p>${esc(w.desc)}</p>`:''}</section>`}).join('');
   const imgs=[...pa.querySelectorAll('img')];toast('사진을 준비하는 중이에요…');
   Promise.all(imgs.map(i=>i.complete?1:new Promise(r=>{i.onload=i.onerror=r}))).then(()=>window.print());
 }
