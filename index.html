@@ -96,7 +96,6 @@ h2{font-size:20px}
 .frame .t{display:block;font-family:var(--serif);font-weight:500;font-size:14.5px;line-height:1.4}
 .frame .n{font-size:12.5px;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .frame .n .h{color:var(--heart)}
-.tape{position:absolute;top:-7px;left:50%;transform:translateX(-50%) rotate(-2deg);background:var(--tape);color:var(--tape-ink);font-size:11px;padding:1px 12px;letter-spacing:.06em;z-index:1}
 .badge{font-size:11px;border:1px solid var(--line-strong);border-radius:3px;padding:0 6px;color:var(--muted)}
 .frame.hid .mat{opacity:.45}
 .empty{border:1px dashed var(--line-strong);padding:48px 20px;text-align:center;color:var(--muted);display:flex;flex-direction:column;gap:14px;align-items:center}
@@ -163,7 +162,7 @@ textarea{resize:vertical;min-height:72px}
 .switch[aria-checked="true"]{background:var(--accent)}
 .switch[aria-checked="true"]::after{transform:translateX(20px)}
 .toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 84px);transform:translateX(-50%);background:var(--ink);color:var(--wall);padding:10px 18px;border-radius:4px;font-size:14px;z-index:95;max-width:calc(100% - 32px);text-align:center}
-.bigqr{position:fixed;inset:0;z-index:85;background:#fff;color:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;text-align:center}
+.bigqr{animation:fadein .3s ease both;position:fixed;inset:0;z-index:85;background:#fff;color:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;text-align:center}
 .bigqr img{width:min(70vmin,560px);height:auto;image-rendering:pixelated}
 .bigqr h2{color:#111;font-size:28px}
 .bigqr button{background:#fff;border:1px solid #999;color:#111;border-radius:4px;padding:8px 16px}
@@ -182,6 +181,35 @@ textarea{resize:vertical;min-height:72px}
 .expo .room-t{position:absolute;top:calc(env(safe-area-inset-top,0px) + 18px);left:max(24px,calc(env(safe-area-inset-left,0px) + 24px));font-family:var(--serif);font-size:14px;color:#9C9990}
 .fade{opacity:0}
 #printArea{display:none}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes hang{0%{opacity:0;transform:translateY(-16px)}70%{opacity:1;transform:translateY(2px)}100%{opacity:1;transform:none}}
+@keyframes drop{0%{opacity:0;transform:translateY(-32px) scale(.96)}60%{opacity:1;transform:translateY(4px) scale(1)}100%{opacity:1;transform:none}}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+@keyframes fadeout{from{opacity:1}to{opacity:0}}
+@keyframes sheetup{from{opacity:0;transform:translateY(24px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes sheetup-m{from{transform:translateY(100%)}to{transform:none}}
+@keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.28)}100%{transform:scale(1)}}
+@keyframes kb{from{transform:scale(1)}to{transform:scale(1.07)}}
+@keyframes slide{from{opacity:0;transform:translateX(var(--dx,40px))}to{opacity:1;transform:none}}
+[data-anim="rise"]{animation:rise .45s cubic-bezier(.2,.7,.3,1) both}
+[data-anim="hang"]{animation:hang .6s cubic-bezier(.2,.7,.3,1) both}
+[data-anim="drop"]{animation:drop .75s cubic-bezier(.2,.7,.3,1) both}
+img.fi{opacity:0;transition:opacity .5s ease}
+img.fi.ok{opacity:1}
+.overlay.in{animation:fadein .22s ease both}
+.overlay.in.sh>.sheet{animation:sheetup .32s cubic-bezier(.2,.7,.3,1) both}
+.overlay.out{animation:fadeout .22s ease both;pointer-events:none}
+.heart.pop{animation:pop .38s ease}
+.lb .stage .mat.slide{animation:slide .32s cubic-bezier(.2,.7,.3,1) both}
+.expo{animation:fadein .45s ease both}
+.expo.out{animation:fadeout .3s ease both}
+.expo .mat{overflow:hidden}
+.expo img.kb{animation:kb 7.5s linear both}
+@media (max-width:760px){
+  .overlay.sh{align-items:flex-end;padding-bottom:0}
+  .overlay.sh>.sheet{border-radius:12px 12px 0 0;padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));max-height:92%}
+  .overlay.in.sh>.sheet{animation:sheetup-m .34s cubic-bezier(.2,.7,.3,1) both}
+}
 @media (max-width:760px){
   .lb{grid-template-columns:1fr}
   .lb .stage{padding:18px}
@@ -190,7 +218,6 @@ textarea{resize:vertical;min-height:72px}
   .wall{column-gap:14px}
   .frame{margin-bottom:20px}
 }
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{
   @page{size:A4;margin:14mm}
   body{background:#fff;color:#111}
@@ -247,6 +274,18 @@ const roster=()=>S.settings?.roster||[];
 const nameOf=no=>roster()[no-1]||'';
 const toMs=t=>t?.toMillis?t.toMillis():Date.now();
 const likeCount=w=>Object.keys(w.likes||{}).length;
+/* 움직임: 처음 보이는 것만 차례로 걸리고, 다시 그려도 이어서 움직여요 */
+const SHOWN=new Map();let viewKey='';
+function anim(id,idx=0,kind='hang'){const now=performance.now();let r=SHOWN.get(id);
+  if(!r){r={t:now,d:Math.min(idx,14)*45,k:kind};SHOWN.set(id,r)}
+  const el=now-r.t,dur=r.k==='drop'?750:600;if(el>r.d+dur)return '';
+  return ` data-anim="${r.k}" style="animation-delay:${Math.round(r.d-el)}ms"`}
+const LOADED=new Set();window.__ld=LOADED;
+const imgCls=url=>LOADED.has(url)?'class="fi ok"':`class="fi" onload="__ld.add(this.getAttribute('src'));this.classList.add('ok')"`;
+function flip(el,from,reverse){const to=el.getBoundingClientRect();if(!to.width)return;const sc=from.width/to.width;
+  const dx=(from.left+from.width/2)-(to.left+to.width/2),dy=(from.top+from.height/2)-(to.top+to.height/2);
+  const k=[{transform:`translate(${dx}px,${dy}px) scale(${sc})`,opacity:.2},{transform:'none',opacity:1}];
+  el.animate(reverse?[k[1],k[0]]:k,{duration:reverse?230:360,easing:'cubic-bezier(.2,.7,.3,1)',fill:'both'})}
 
 let tt;function toast(m){clearTimeout(tt);let t=$('.toast');if(!t){t=document.createElement('div');t.className='toast';t.setAttribute('role','status');document.body.appendChild(t)}t.textContent=m;t.hidden=false;tt=setTimeout(()=>t.hidden=true,2800)}
 const fail=e=>{console.error(e);toast('저장하지 못했어요. 인터넷 연결을 확인하고 다시 해 주세요.')};
@@ -317,7 +356,9 @@ function subscribe(){
   S.subs.push(onSnapshot(query(collection(db,'boards'),where('year','==',S.year)),q=>{
     S.boards=q.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>toMs(b.createdAt)-toMs(a.createdAt));render()},onErr));
   const wq=S.role==='teacher'?query(collection(db,'works'),where('year','==',S.year)):query(collection(db,'works'),where('year','==',S.year),where('hidden','==',false));
+  S.worksLoaded=false;
   S.subs.push(onSnapshot(wq,q=>{
+    if(S.worksLoaded)q.docChanges().forEach(c=>{if(c.type==='added')SHOWN.set(c.doc.id,{t:performance.now(),d:0,k:'drop'})});S.worksLoaded=true;
     S.works=q.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>toMs(b.createdAt)-toMs(a.createdAt));render();if($('.lb'))drawWork()},onErr));
   render();
 }
@@ -335,58 +376,67 @@ function render(){
   $('#adminBtn').hidden=S.role!=='teacher';
   const cur=S.year===S.settings.year;
   if(S.view==='board'&&!S.boards.find(b=>b.id===S.board))S.view='home';
+  const key=`${S.view}|${S.board}|${S.student}|${S.year}`;if(key!==viewKey){viewKey=key;SHOWN.clear()}
   main.innerHTML=S.view==='board'?boardView():S.view==='student'?studentView():homeView();
   $('#fab').hidden=!(S.view==='board'&&cur);
 }
 function homeView(){
   const cur=S.year===S.settings.year;
-  const rooms=S.boards.map(b=>{const ws=boardWorks(b.id);const cover=ws.find(w=>!w.hidden)?.photos?.[0]?.thumb;
-    return `<button class="room" data-board="${b.id}"><span class="cover"><span style="${cover?`background-image:url('${cover}')`:''}">${cover?'':'아직 작품이 없어요'}</span></span>
+  const rooms=S.boards.map((b,i)=>{const ws=boardWorks(b.id);const cover=ws.find(w=>!w.hidden)?.photos?.[0]?.thumb;
+    return `<button class="room" data-board="${b.id}"${anim('r'+b.id,i)}><span class="cover"><span style="${cover?`background-image:url('${cover}')`:''}">${cover?'':'아직 작품이 없어요'}</span></span>
       <span><h3>${esc(b.title)}</h3><span class="meta">작품 ${ws.length}점${b.when?` · ${esc(b.when)}`:''}</span></span></button>`}).join('');
-  const add=S.role==='teacher'&&cur?`<button class="room new" data-act="newBoard"><span class="cover"><span>＋ 새 전시실 만들기</span></span><span><h3 style="color:var(--muted)">새 전시실</h3><span class="meta">단원이나 주제별로</span></span></button>`:'';
+  const add=S.role==='teacher'&&cur?`<button class="room new" data-act="newBoard"${anim('rnew',S.boards.length)}><span class="cover"><span>＋ 새 전시실 만들기</span></span><span><h3 style="color:var(--muted)">새 전시실</h3><span class="meta">단원이나 주제별로</span></span></button>`:'';
   const names=cur?roster():[...new Set(S.works.map(w=>w.no))].sort((a,b)=>a-b).map(no=>S.works.find(w=>w.no===no).name);
   const nos=cur?roster().map((_,i)=>i+1):[...new Set(S.works.map(w=>w.no))].sort((a,b)=>a-b);
-  const rosterHtml=nos.map((no,i)=>`<button data-stu="${no}"><b>${no}</b><span>${esc(names[i])}</span><span class="c">${S.works.filter(w=>w.no===no).length}점</span></button>`).join('');
+  const rosterHtml=nos.map((no,i)=>`<button data-stu="${no}"${anim('s'+no,i+4)}><b>${no}</b><span>${esc(names[i])}</span><span class="c">${S.works.filter(w=>w.no===no).length}점</span></button>`).join('');
   const emptyRooms=!S.boards.length&&!add?`<div class="empty">아직 전시실이 없어요. 선생님이 전시실을 만들면 여기에 나타나요.</div>`:'';
-  return `<section class="sec"><div class="sechead"><div><p class="eyebrow">${S.year}학년도 전시실</p><h1>${cur?'우리 반 작품들':'지난 학년 작품들'}</h1></div>
+  return `<section class="sec"><div class="sechead"${anim('head',0,'rise')}><div><p class="eyebrow">${S.year}학년도 전시실</p><h1>${cur?'우리 반 작품들':'지난 학년 작품들'}</h1></div>
     <span class="meta">${S.boards.length}개 전시실 · 작품 ${S.works.length}점</span></div>
     ${emptyRooms}<div class="rooms">${rooms}${add}</div></section>
-    ${nos.length?`<section class="sec"><div class="sechead"><h2>학생별 모아보기</h2><span class="meta">번호를 누르면 그 학생의 작품만 모여요</span></div><div class="roster">${rosterHtml}</div></section>`:''}`;
+    ${nos.length?`<section class="sec"><div class="sechead"${anim('head2',4,'rise')}><h2>학생별 모아보기</h2><span class="meta">번호를 누르면 그 학생의 작품만 모여요</span></div><div class="roster">${rosterHtml}</div></section>`:''}`;
 }
-function frame(w,showBoard){
+function frame(w,showBoard,idx=0){
   const b=S.boards.find(x=>x.id===w.boardId);const n=likeCount(w);
-  const fresh=Date.now()-toMs(w.createdAt)<86400000;
-  return `<button class="frame${w.hidden?' hid':''}" data-work="${w.id}" aria-label="${esc(w.title)}, ${w.no}번 ${esc(w.name)}">
-    ${fresh?'<span class="tape">새 작품</span>':''}
-    <span class="mat"><img src="${esc(w.photos[0].thumb)}" alt="" loading="lazy" ${w.photos[0].w?`width="${w.photos[0].w}" height="${w.photos[0].h}"`:''}></span>
+  return `<button class="frame${w.hidden?' hid':''}" data-work="${w.id}" aria-label="${esc(w.title)}, ${w.no}번 ${esc(w.name)}"${anim(w.id,idx)}>
+    <span class="mat"><img src="${esc(w.photos[0].thumb)}" alt="" loading="lazy" ${imgCls(w.photos[0].thumb)} ${w.photos[0].w?`width="${w.photos[0].w}" height="${w.photos[0].h}"`:''}></span>
     <span class="cap"><span class="t">${esc(w.title)}</span>
     <span class="n"><span>${showBoard?esc(b?.title||''):`${w.no}번 ${esc(w.name)}`}</span>${n?`<span class="h">♥ ${n}</span>`:''}${w.photos.length>1?`<span class="badge">사진 ${w.photos.length}</span>`:''}${w.hidden?'<span class="badge">숨김</span>':''}</span></span></button>`;
 }
 function boardView(){
   const b=S.boards.find(x=>x.id===S.board);const ws=boardWorks(b.id);const cur=S.year===S.settings.year;
-  const body=ws.length?`<div class="wall">${ws.map(w=>frame(w)).join('')}</div>`:
+  const body=ws.length?`<div class="wall">${ws.map((w,i)=>frame(w,false,i)).join('')}</div>`:
     `<div class="empty"><h2>아직 걸린 작품이 없어요</h2><span>첫 작품을 올리면 이 벽에 걸려요.</span>${cur?'<button class="btn primary" data-act="upload">작품 올리기</button>':''}</div>`;
   const tActs=S.role==='teacher'?`<button class="btn" data-act="editBoard">전시실 이름 고치기</button>`:'';
   return `<button class="back" data-act="home">← 전시실로</button>
-    <div class="boardhead"><div><p class="eyebrow">${b.when?esc(b.when)+' · ':''}작품 ${ws.length}점</p><h1>${esc(b.title)}</h1></div>
+    <div class="boardhead"${anim('head',0,'rise')}><div><p class="eyebrow">${b.when?esc(b.when)+' · ':''}작품 ${ws.length}점</p><h1>${esc(b.title)}</h1></div>
     <div class="actions">${tActs}${ws.length?'<button class="btn" data-act="expo">▶ 전시 모드</button>':''}${cur?'<button class="btn primary" data-act="upload">＋ 작품 올리기</button>':''}</div></div>${body}`;
 }
 function studentList(){return S.works.filter(w=>w.no===S.student)}
 function studentView(){
   const ws=studentList();const name=ws[0]?.name||nameOf(S.student);
   return `<button class="back" data-act="home">← 전시실로</button>
-    <div class="boardhead"><div><p class="eyebrow">${S.year}학년도 · 작품 ${ws.length}점</p><h1>${S.student}번 ${esc(name)}의 작품</h1></div>
+    <div class="boardhead"${anim('head',0,'rise')}><div><p class="eyebrow">${S.year}학년도 · 작품 ${ws.length}점</p><h1>${S.student}번 ${esc(name)}의 작품</h1></div>
     ${S.role==='teacher'&&ws.length?'<div class="actions"><button class="btn" data-act="book">작품집 인쇄·PDF</button></div>':''}</div>
-    ${ws.length?`<div class="wall">${ws.map(w=>frame(w,true)).join('')}</div>`:'<div class="empty">아직 올린 작품이 없어요.</div>'}`;
+    ${ws.length?`<div class="wall">${ws.map((w,i)=>frame(w,true,i)).join('')}</div>`:'<div class="empty">아직 올린 작품이 없어요.</div>'}`;
 }
 
 /* ---------- 작품 크게 보기 ---------- */
 let ctx={id:null,photo:0,confirm:false,comments:[],csub:null};
-function openLayer(html,cls='sheet'){$('#layer').innerHTML=`<div class="overlay" id="ov"><div class="${cls}" role="dialog" aria-modal="true">${html}</div></div>`}
-function closeLayer(){ctx.csub&&ctx.csub();ctx.csub=null;ctx.id=null;$('#layer').innerHTML=''}
+function openLayer(html,cls='sheet',kind=''){const ov=$('#ov');
+  if(ov&&ov.firstElementChild.className===cls){const dlg=ov.firstElementChild;dlg.innerHTML=html;if(dlg.dataset.kind!==kind){dlg.dataset.kind=kind;dlg.scrollTop=0}return false}
+  $('#layer').innerHTML=`<div class="overlay in${cls==='sheet'?' sh':''}" id="ov"><div class="${cls}" role="dialog" aria-modal="true" data-kind="${kind}">${html}</div></div>`;return true}
+function closeLayer(){ctx.csub&&ctx.csub();ctx.csub=null;const id=ctx.id;ctx.id=null;const ov=$('#ov');
+  if(!ov){$('#layer').innerHTML='';return}
+  ov.removeAttribute('id');ov.classList.remove('in');ov.classList.add('out');
+  const lb=ov.querySelector('.lb'),fr=id&&document.querySelector(`[data-work="${id}"] .mat`);
+  if(lb&&fr)flip(lb,fr.getBoundingClientRect(),true);
+  setTimeout(()=>ov.remove(),240)}
 const currentList=()=>S.view==='student'?studentList():boardWorks(S.board);
-function openWork(id){
-  ctx.csub&&ctx.csub();ctx.id=id;ctx.photo=0;ctx.confirm=false;ctx.comments=[];drawWork();
+function openWork(id,dir=0){
+  ctx.csub&&ctx.csub();ctx.id=id;ctx.photo=0;ctx.confirm=false;ctx.comments=[];ctx.dir=dir;
+  const fr=!dir&&document.querySelector(`[data-work="${id}"] .mat`);const from=fr&&fr.getBoundingClientRect();
+  drawWork();
+  if(from&&$('.lb'))flip($('.lb'),from);
   ctx.csub=onSnapshot(collection(db,'works',id,'comments'),q=>{ctx.comments=q.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>toMs(a.createdAt)-toMs(b.createdAt));drawWork()},()=>{});
 }
 function drawWork(){
@@ -405,7 +455,7 @@ function drawWork(){
       <p class="eyebrow" style="margin:0">${esc(b?.title||'')}</p>
       <div><h2>${esc(w.title)}</h2><p class="meta" style="margin:4px 0 0">${w.no}번 ${esc(w.name)}</p></div>
       ${w.desc?`<p class="desc">${esc(w.desc)}</p>`:''}
-      <button class="heart" data-act="heart" aria-pressed="${liked}" ${cur&&!w.hidden?'':'disabled'}>${liked?'♥':'♡'} ${likeCount(w)}</button>
+      <button class="heart${performance.now()-(ctx.popT||0)<380?' pop':''}" style="animation-delay:-${Math.round(performance.now()-(ctx.popT||0))}ms" data-act="heart" aria-pressed="${liked}" ${cur&&!w.hidden?'':'disabled'}>${liked?'♥':'♡'} ${likeCount(w)}</button>
       <div class="cmts"><strong style="font-weight:500;font-size:14px">한 줄 감상 ${ctx.comments.length}</strong>${cm||'<span class="meta">첫 감상을 남겨 보세요.</span>'}
         ${canC?`<form class="addc" id="cform"><input type="text" id="cinput" maxlength="40" placeholder="${t?'선생님 한마디':'좋았던 점을 한 줄로'}" aria-label="한 줄 감상"><button class="btn sm primary">남기기</button></form><span class="err" id="cerr"></span>`:
         `<p class="note">${cur?'선생님이 감상 남기기를 잠시 꺼두었어요.':'지난 학년 작품에는 감상을 남길 수 없어요.'}</p>`}</div>
@@ -414,8 +464,9 @@ function drawWork(){
       <div class="nav"><button class="btn sm" data-act="prev" ${i===0?'disabled':''}>← 이전</button><span class="meta">${i+1} / ${list.length}</span><button class="btn sm" data-act="next" ${i===list.length-1?'disabled':''}>다음 →</button></div>
     </div>`,'lb');
   const ci=$('#cinput');if(ci){ci.value=prevVal;if(hadFocus)ci.focus()}
+  if(ctx.dir){const m=$('.lb .stage .mat');m.style.setProperty('--dx',(ctx.dir*48)+'px');m.classList.add('slide');ctx.dir=0}
 }
-function step(d){const list=currentList();const i=list.findIndex(w=>w.id===ctx.id)+d;if(i>=0&&i<list.length)openWork(list[i].id)}
+function step(d){const list=currentList();const i=list.findIndex(w=>w.id===ctx.id)+d;if(i>=0&&i<list.length)openWork(list[i].id,d)}
 
 /* ---------- 올리기 ---------- */
 let up={photos:[],board:null,busy:false};
@@ -434,7 +485,7 @@ function drawUpload(err=''){
     <div class="field"><label for="utitle">작품 제목</label><input type="text" id="utitle" maxlength="30" value="${esc(t)}" placeholder="우리 동네 저녁"></div>
     <div class="field"><label for="udesc">작품 설명 (선택)</label><textarea id="udesc" maxlength="120" placeholder="어떤 점을 표현하려고 했나요?">${esc(d)}</textarea></div>
     <span class="err" id="uerr">${esc(err)}</span>
-    <div class="actions" style="justify-content:flex-end;margin-top:8px"><button class="btn" data-act="close">취소</button><button class="btn primary" data-act="submit" id="usub">벽에 걸기</button></div>`);
+    <div class="actions" style="justify-content:flex-end;margin-top:8px"><button class="btn" data-act="close">취소</button><button class="btn primary" data-act="submit" id="usub">벽에 걸기</button></div>`,'sheet','upload');
 }
 function loadImage(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file);const im=new Image();im.onload=()=>{res(im)};im.onerror=rej;im.src=u})}
 function resized(im,max,q){return new Promise(res=>{const k=Math.min(1,max/Math.max(im.naturalWidth,im.naturalHeight));const c=document.createElement('canvas');
@@ -488,7 +539,7 @@ function drawAdmin(){
       <div class="row"><div><strong>새 학년도 시작</strong><p>새 명단과 새 QR이 만들어지고, 지난 작품은 그대로 남아 선생님만 볼 수 있어요.</p></div><button class="btn sm" data-act="newYear">${s.year+1}학년도 시작</button></div>
       <div class="row"><div><strong>학생별 작품집</strong><p>학생별 모아보기에서 학생을 고르고 "작품집 인쇄·PDF"를 누르세요.</p></div></div>
       <div class="row"><div><strong>로그인 계정</strong><p>${esc(S.user.email||'')}</p></div><button class="btn sm" data-act="logout">로그아웃</button></div>
-    </div>`);
+    </div>`,'sheet','admin');
 }
 function openRoster(newYear){
   const s=S.settings;
@@ -497,7 +548,7 @@ function openRoster(newYear){
     <div class="field"><label for="rname">미술관 이름</label><input type="text" id="rname" maxlength="20" value="${esc(s.className)}"></div>
     <div class="field"><label for="rlist">반 명단 (한 줄에 한 명, 1번부터)</label><textarea id="rlist" rows="12">${newYear?'':esc(roster().join('\n'))}</textarea></div>
     <span class="err" id="rerr"></span>
-    <div class="actions" style="justify-content:flex-end"><button class="btn" data-act="close">취소</button><button class="btn primary" data-act="${newYear?'newYearYes':'rosterSave'}">${newYear?'새 학년도 시작':'저장'}</button></div>`);
+    <div class="actions" style="justify-content:flex-end"><button class="btn" data-act="close">취소</button><button class="btn primary" data-act="${newYear?'newYearYes':'rosterSave'}">${newYear?'새 학년도 시작':'저장'}</button></div>`,'sheet','roster');
 }
 async function rotateKey(patch){
   const s=S.settings;const key=newKey();const next={...s,...patch,joinKey:key};
@@ -513,7 +564,7 @@ function openBoardForm(edit){
     <div class="field"><label for="nbt">전시실 이름</label><input type="text" id="nbt" maxlength="24" value="${esc(b?.title||'')}" placeholder="12월 점묘화"></div>
     <div class="field"><label for="nbw">시기 (선택)</label><input type="text" id="nbw" maxlength="12" value="${esc(b?.when||'')}" placeholder="12월"></div><span class="err" id="nberr"></span>
     <div class="actions" style="justify-content:space-between">${empty?'<button class="btn danger" data-act="delBoard">전시실 지우기</button>':'<span></span>'}
-    <span class="actions"><button class="btn" data-act="close">취소</button><button class="btn primary" data-act="${b?'saveBoard':'mkBoard'}">${b?'저장':'만들기'}</button></span></div>`);
+    <span class="actions"><button class="btn" data-act="close">취소</button><button class="btn primary" data-act="${b?'saveBoard':'mkBoard'}">${b?'저장':'만들기'}</button></span></div>`,'sheet','board');
   setTimeout(()=>$('#nbt')?.focus(),0);
 }
 
@@ -527,12 +578,12 @@ function openExpo(){ex.list=boardWorks(S.board).filter(w=>!w.hidden);if(!ex.list
   showExpo(false);tick();
   try{navigator.wakeLock?.request('screen').then(l=>ex.lock=l).catch(()=>{})}catch{}
 }
-function showExpo(anim=true){const w=ex.list[ex.i];const set=()=>{$('#exi').src=w.photos[0].url;$('#ext').textContent=w.title;$('#exn').textContent=`${w.no}번 ${w.name}${w.desc?' · '+w.desc:''}`;
+function showExpo(anim=true){const w=ex.list[ex.i];const set=()=>{const im=$('#exi');im.classList.remove('kb');im.src=w.photos[0].url;void im.offsetWidth;im.classList.add('kb');$('#ext').textContent=w.title;$('#exn').textContent=`${w.no}번 ${w.name}${w.desc?' · '+w.desc:''}`;
   $('#exc').textContent=`${ex.i+1} / ${ex.list.length}`;$('#exm').classList.remove('fade');$('#exp').classList.remove('fade')};
-  if(anim&&!matchMedia('(prefers-reduced-motion: reduce)').matches){$('#exm').classList.add('fade');$('#exp').classList.add('fade');setTimeout(set,700)}else set();
+  if(anim){$('#exm').classList.add('fade');$('#exp').classList.add('fade');setTimeout(set,700)}else set();
   const nx=ex.list[(ex.i+1)%ex.list.length];if(nx){const pre=new Image();pre.src=nx.photos[0].url}}
 function tick(){clearInterval(ex.timer);if(ex.play)ex.timer=setInterval(()=>{ex.i=(ex.i+1)%ex.list.length;showExpo()},7000)}
-function closeExpo(){clearInterval(ex.timer);try{ex.lock?.release()}catch{}closeLayer()}
+function closeExpo(){clearInterval(ex.timer);try{ex.lock?.release()}catch{}const e=$('#expo');if(!e)return;e.id='';e.classList.add('out');setTimeout(()=>e.remove(),300)}
 
 /* ---------- 작품집 ---------- */
 function printBook(){
@@ -575,7 +626,7 @@ document.addEventListener('click',async e=>{
   if(d.ph){ctx.photo=+d.ph;drawWork();return}
   if(a==='prev'||a==='next'){step(a==='next'?1:-1);return}
   const w=S.works.find(x=>x.id===ctx.id);
-  if(a==='heart'&&w){const liked=!!w.likes?.[uid()];await updateDoc(doc(db,'works',w.id),{[`likes.${uid()}`]:liked?deleteField():true});return}
+  if(a==='heart'&&w){const liked=!!w.likes?.[uid()];const l={...(w.likes||{})};if(liked)delete l[uid()];else{l[uid()]=true;ctx.popT=performance.now()}w.likes=l;drawWork();await updateDoc(doc(db,'works',w.id),{[`likes.${uid()}`]:liked?deleteField():true});return}
   if(a==='hide'&&w){await updateDoc(doc(db,'works',w.id),{hidden:!w.hidden});toast(w.hidden?'다시 보이게 했어요':'학생들에게 안 보이게 숨겼어요');return}
   if(a==='del'){ctx.confirm=true;drawWork();return}
   if(a==='delno'){ctx.confirm=false;drawWork();return}
