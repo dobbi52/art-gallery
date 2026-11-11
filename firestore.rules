@@ -1,0 +1,97 @@
+rules_version = '2';
+// 우리 반 미술관 - 데이터베이스(Firestore) 보안 규칙
+// 선생님 계정: dobbi7871@gmail.com
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isTeacher() {
+      return signedIn()
+        && request.auth.token.email == 'dobbi7871@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+    function settings() { return get(/databases/$(db)/documents/settings/class).data; }
+    function memberPath() { return /databases/$(db)/documents/members/$(request.auth.uid); }
+    // 지금 QR(열쇠)로 들어온 학생인지
+    function isMember() {
+      return signedIn() && exists(memberPath())
+        && get(memberPath()).data.key == settings().joinKey;
+    }
+    function me() { return get(memberPath()).data; }
+
+    // 미술관 설정 (이름, 학년도, 명단, 현재 QR 열쇠, 감상 켜기)
+    match /settings/class {
+      allow read: if isTeacher() || isMember();
+      allow write: if isTeacher();
+    }
+
+    // QR 열쇠별 입장 정보 (열쇠를 아는 사람만 하나씩 읽을 수 있음, 목록 보기 불가)
+    match /joins/{key} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow write: if isTeacher();
+    }
+
+    // 들어온 학생 기기 (번호 고르기)
+    match /members/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isTeacher());
+      allow list, delete: if isTeacher();
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['key', 'no', 'name', 'joinedAt'])
+        && request.resource.data.key == settings().joinKey
+        && request.resource.data.no is int
+        && request.resource.data.no >= 1
+        && request.resource.data.no <= settings().roster.size()
+        && request.resource.data.name == settings().roster[request.resource.data.no - 1];
+    }
+
+    // 전시실 - 학생은 올해 것만 보기, 만들기와 고치기는 선생님만
+    match /boards/{id} {
+      allow read: if isTeacher() || (isMember() && resource.data.year == settings().year);
+      allow write: if isTeacher();
+    }
+
+    // 작품 - 학생은 올리기와 하트만, 숨기기와 삭제는 선생님만
+    match /works/{id} {
+      allow read: if isTeacher()
+        || (isMember() && resource.data.year == settings().year && resource.data.hidden == false);
+      allow create: if isTeacher() || (isMember() && validNewWork(request.resource.data));
+      allow update: if isTeacher()
+        || (isMember()
+            && resource.data.year == settings().year
+            && resource.data.hidden == false
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
+            && request.resource.data.likes.diff(resource.data.likes).affectedKeys().hasOnly([request.auth.uid]));
+      allow delete: if isTeacher();
+
+      // 한 줄 감상 - 학생은 남기기만, 지우기는 선생님만
+      match /comments/{cid} {
+        allow read: if isTeacher() || isMember();
+        allow create: if isTeacher()
+          || (isMember()
+              && settings().commentsOn == true
+              && request.resource.data.uid == request.auth.uid
+              && request.resource.data.no == me().no
+              && request.resource.data.name == me().name
+              && request.resource.data.text is string
+              && request.resource.data.text.size() > 0
+              && request.resource.data.text.size() <= 40);
+        allow update: if false;
+        allow delete: if isTeacher();
+      }
+    }
+
+    function validNewWork(d) {
+      return d.uid == request.auth.uid
+        && d.no == me().no
+        && d.name == me().name
+        && d.year == settings().year
+        && d.hidden == false
+        && d.likes.size() == 0
+        && d.title is string && d.title.size() > 0 && d.title.size() <= 30
+        && d.desc is string && d.desc.size() <= 120
+        && d.photos is list && d.photos.size() >= 1 && d.photos.size() <= 3
+        && exists(/databases/$(db)/documents/boards/$(d.boardId));
+    }
+  }
+}

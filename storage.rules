@@ -1,0 +1,28 @@
+rules_version = '2';
+// 우리 반 미술관 - 사진 저장소(Storage) 보안 규칙
+// 선생님 계정: dobbi7871@gmail.com
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isTeacher() {
+      return request.auth != null
+        && request.auth.token.email == 'dobbi7871@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+    function isMember() {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/members/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/members/$(request.auth.uid)).data.key
+           == firestore.get(/databases/(default)/documents/settings/class).data.joinKey;
+    }
+
+    // 작품 사진: 우리 반만 보기, 사진 파일만, 한 장 2MB 이하, 지우기는 선생님만
+    match /works/{uid}/{file} {
+      allow read: if isTeacher() || isMember();
+      allow create: if (isTeacher() || (isMember() && request.auth.uid == uid))
+        && request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow update, delete: if isTeacher();
+    }
+  }
+}
