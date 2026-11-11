@@ -538,8 +538,8 @@ function drawAdmin(){
       <div class="row"><div class="qr"><img src="${qrData(joinUrl(),4)}" alt="학생 입장 QR"><div style="min-width:0;flex:1"><strong>학생 입장 QR</strong><p>찍으면 바로 들어와 작품을 보고 올릴 수 있어요.</p><p style="overflow-wrap:anywhere;font-size:12px">${esc(joinUrl())}</p></div></div>
         <div class="actions"><button class="btn sm" data-act="qrbig">크게 띄우기</button><button class="btn sm" data-act="copy">주소 복사</button><button class="btn sm" data-act="qrnew">QR 새로 만들기</button></div>
         ${conf('qrnew','새 QR을 만들면 지금 들어와 있는 학생들도 새 QR을 다시 찍어야 해요.','새로 만들기')}</div>
-      <div class="row"><div class="qr"><img src="${qrData(teacherUrl(),4)}" alt="선생님용 접속 QR"><div style="min-width:0;flex:1"><strong>선생님용 접속 QR</strong><p>선생님 휴대폰으로 찍으면 선생님 로그인 화면이 열려요. 학생이 찍어도 선생님 구글 계정이 없으면 들어올 수 없어요.</p></div></div>
-        <div class="actions"><button class="btn sm" data-act="tqrbig">크게 띄우기</button></div></div>
+      <div class="row"><div><strong>선생님용 접속 QR</strong><p>선생님 휴대폰으로 찍으면 선생님 로그인 화면이 열려요. 학생이 찍어도 선생님 구글 계정이 없으면 들어올 수 없어요.</p></div>
+        <button class="btn sm" data-act="tqrbig">QR 보기</button></div>
       <div class="row"><div><strong>들어온 학생 ${adm.members.length}명</strong><p>번호를 잘못 고른 학생은 지우면 다시 고를 수 있어요.</p>
         <div class="mlist">${adm.members.map(m=>`<span>${m.no}번 ${esc(m.name)}<button data-delm="${m.id}" aria-label="${m.no}번 다시 고르게 하기">×</button></span>`).join('')||'<span style="padding-right:10px">아직 없어요</span>'}</div></div></div>
       <div class="row"><div><strong>한 줄 감상</strong><p>끄면 학생들이 새 감상을 남길 수 없어요.</p></div><button class="switch" role="switch" data-act="csw" aria-checked="${s.commentsOn!==false}" aria-label="한 줄 감상 켜기"></button></div>
