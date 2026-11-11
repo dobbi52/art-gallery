@@ -265,8 +265,13 @@ if(!cfg.apiKey){main.innerHTML=`<div class="screen"><h2>Firebase 설정이 필�
 const app=initializeApp(cfg),auth=getAuth(app),db=getFirestore(app),st=getStorage(app);
 
 /* QR로 들어오면 주소의 열쇠를 기기에 기억하고 주소에서는 지워요 */
-const urlKey=new URLSearchParams(location.search).get('k');
-if(urlKey){lsSet(KEY_STORE,urlKey);history.replaceState(null,'',location.pathname)}
+const params=new URLSearchParams(location.search);
+const urlKey=params.get('k');
+/* 선생님용 QR(?t=1)로 들어오면 학생 기억을 지우고 선생님 로그인 화면으로 */
+let wantTeacher=params.get('t')==='1';
+if(wantTeacher){try{localStorage.removeItem(KEY_STORE)}catch{}}
+else if(urlKey)lsSet(KEY_STORE,urlKey);
+if(urlKey||wantTeacher)history.replaceState(null,'',location.pathname);
 
 const S={user:null,role:null,settings:null,me:null,join:null,year:null,view:'home',board:null,student:null,boards:[],works:[],subs:[],setSub:null};
 const uid=()=>S.user?.uid;
@@ -293,6 +298,7 @@ const fail=e=>{console.error(e);toast('저장하지 못했어요. 인터넷 연�
 /* ---------- 들어오기 ---------- */
 onAuthStateChanged(auth,async user=>{
   S.user=user;stopSubs();
+  if(user&&user.isAnonymous&&wantTeacher){wantTeacher=false;await signOut(auth);return}
   if(!user){
     if(lsGet(KEY_STORE)){try{await signInAnonymously(auth)}catch(e){showScreen('error')}return}
     return showScreen('landing');
@@ -518,6 +524,7 @@ async function submitUpload(){
 /* ---------- 관리 ---------- */
 const newKey=()=>{const a=new Uint8Array(12);crypto.getRandomValues(a);return Array.from(a,x=>'abcdefghjkmnpqrstuvwxyz23456789'[x%31]).join('')};
 const joinUrl=()=>`${location.origin}${location.pathname}?k=${S.settings.joinKey}`;
+const teacherUrl=()=>`${location.origin}${location.pathname}?t=1`;
 function qrData(text,cell){const q=qrcode(0,'M');q.addData(text);q.make();return q.createDataURL(cell,2)}
 let adm={confirm:null,members:[]};
 async function openAdmin(){adm.confirm=null;drawAdmin();
@@ -531,6 +538,8 @@ function drawAdmin(){
       <div class="row"><div class="qr"><img src="${qrData(joinUrl(),4)}" alt="학생 입장 QR"><div style="min-width:0;flex:1"><strong>학생 입장 QR</strong><p>찍으면 바로 들어와 작품을 보고 올릴 수 있어요.</p><p style="overflow-wrap:anywhere;font-size:12px">${esc(joinUrl())}</p></div></div>
         <div class="actions"><button class="btn sm" data-act="qrbig">크게 띄우기</button><button class="btn sm" data-act="copy">주소 복사</button><button class="btn sm" data-act="qrnew">QR 새로 만들기</button></div>
         ${conf('qrnew','새 QR을 만들면 지금 들어와 있는 학생들도 새 QR을 다시 찍어야 해요.','새로 만들기')}</div>
+      <div class="row"><div class="qr"><img src="${qrData(teacherUrl(),4)}" alt="선생님용 접속 QR"><div style="min-width:0;flex:1"><strong>선생님용 접속 QR</strong><p>선생님 휴대폰으로 찍으면 선생님 로그인 화면이 열려요. 학생이 찍어도 선생님 구글 계정이 없으면 들어올 수 없어요.</p></div></div>
+        <div class="actions"><button class="btn sm" data-act="tqrbig">크게 띄우기</button></div></div>
       <div class="row"><div><strong>들어온 학생 ${adm.members.length}명</strong><p>번호를 잘못 고른 학생은 지우면 다시 고를 수 있어요.</p>
         <div class="mlist">${adm.members.map(m=>`<span>${m.no}번 ${esc(m.name)}<button data-delm="${m.id}" aria-label="${m.no}번 다시 고르게 하기">×</button></span>`).join('')||'<span style="padding-right:10px">아직 없어요</span>'}</div></div></div>
       <div class="row"><div><strong>한 줄 감상</strong><p>끄면 학생들이 새 감상을 남길 수 없어요.</p></div><button class="switch" role="switch" data-act="csw" aria-checked="${s.commentsOn!==false}" aria-label="한 줄 감상 켜기"></button></div>
@@ -646,7 +655,8 @@ document.addEventListener('click',async e=>{
     return}
   if(a==='delBoard'){await deleteDoc(doc(db,'boards',S.board));closeLayer();S.view='home';render();toast('전시실을 지웠어요');return}
   if(a==='csw'){const on=S.settings.commentsOn===false;await updateDoc(doc(db,'settings','class'),{commentsOn:on});el.setAttribute('aria-checked',on);toast(on?'한 줄 감상을 켰어요':'한 줄 감상을 껐어요');return}
-  if(a==='qrbig'){const ov=document.createElement('div');ov.className='bigqr';ov.innerHTML=`<h2>${esc(S.settings.className)}</h2><img src="${qrData(joinUrl(),10)}" alt="학생 입장 QR"><p style="margin:0;color:#444">휴대폰 카메라로 찍어서 들어오세요</p><button data-act="bigclose">닫기</button>`;document.body.appendChild(ov);return}
+  if(a==='qrbig'||a==='tqrbig'){const t=a==='tqrbig';const ov=document.createElement('div');ov.className='bigqr';
+    ov.innerHTML=`<h2>${t?'선생님용 접속':esc(S.settings.className)}</h2><img src="${qrData(t?teacherUrl():joinUrl(),10)}" alt="${t?'선생님용 접속 QR':'학생 입장 QR'}"><p style="margin:0;color:#444">${t?'선생님 휴대폰으로 찍고 구글 계정으로 로그인하세요':'휴대폰 카메라로 찍어서 들어오세요'}</p><button data-act="bigclose">닫기</button>`;document.body.appendChild(ov);return}
   if(a==='bigclose'){$('.bigqr')?.remove();return}
   if(a==='copy'){try{await navigator.clipboard.writeText(joinUrl());toast('주소를 복사했어요')}catch{toast('복사하지 못했어요. 주소를 길게 눌러 복사해 주세요.')}return}
   if(a==='qrnew'){adm.confirm='qrnew';drawAdmin();return}
