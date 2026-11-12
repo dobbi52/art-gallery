@@ -445,17 +445,21 @@ const boardWorks=id=>S.works.filter(w=>w.boardId===id);
 /* 작품 벽: 미술관처럼 한 줄의 높이를 맞추고, 가로 작품은 넓게 세로 작품은 좁게 */
 let lastW=0;
 const wallGeo=()=>{const W=main.clientWidth;return W<640?{W,H:170,g:12}:W<960?{W,H:220,g:20}:{W,H:250,g:24}};
-function wall(list,fn,style=''){const {W,H,g}=wallGeo();lastW=W;const P=22;const rows=[];let cur=[],sum=0;
-  list.forEach((w,i)=>{const p=w.photos[0];const r=p.w&&p.h?p.w/p.h:1;const n=cur.length+1,s2=sum+r;
-    if(n>1&&s2*H+P*n+g*(n-1)>W){
-      const hW=(W-P*n-g*(n-1))/s2,hO=(W-P*(n-1)-g*(n-2))/sum;
-      if(hO<=H*1.35&&Math.abs(Math.log(hO/H))<Math.abs(Math.log(hW/H))){rows.push({items:cur,h:hO});cur=[{w,i,r}];sum=r}
-      else{cur.push({w,i,r});rows.push({items:cur,h:hW});cur=[];sum=0}
-      return}
-    cur.push({w,i,r});sum=s2;
-    if(n===1&&r*H+P>W){rows.push({items:cur,h:(W-P)/r});cur=[];sum=0}});
-  if(cur.length)rows.push({items:cur,h:H});
-  return `<div class="wall" style="${style}">${rows.map(row=>`<div class="wrow">${row.items.map(x=>`<div class="wcell" style="width:${Math.floor(x.r*row.h+P)}px">${fn(x.w,x.i)}</div>`).join('')}</div>`).join('')}</div>`}
+function wall(list,fn,style=''){const {W,H,g}=wallGeo();lastW=W;const P=22;const n=list.length;if(!n)return '';
+  const its=list.map(w=>{const p=w.photos[0];return {w,r:p.w&&p.h?p.w/p.h:1}});
+  /* 1. 가로 작품과 세로 작품을 고르게 섞기 */
+  const Ls=its.filter(x=>x.r>1.15),Ps=its.filter(x=>x.r<=1.15);
+  const posL=new Set(Ls.map((_,k)=>Math.min(n-1,Math.floor((k+.5)*n/Ls.length))));
+  const seq=[];let a=0,b=0;for(let i=0;i<n;i++)seq.push(posL.has(i)&&a<Ls.length?Ls[a++]:b<Ps.length?Ps[b++]:Ls[a++]);
+  /* 2. 줄마다 높이가 기준에 가장 가깝게 나누기 */
+  const hOf=(i,j)=>{let sr=0;for(let k=i;k<j;k++)sr+=seq[k].r;const m=j-i;return (W-P*m-g*(m-1))/sr};
+  const best=Array(n+1).fill(Infinity),cut=Array(n+1).fill(0);best[0]=0;
+  for(let j=1;j<=n;j++)for(let i=Math.max(0,j-8);i<j;i++){const h=hOf(i,j);if(h<=0||best[i]===Infinity)continue;
+    let c=j===n&&h>H?(h/H-1)*.3:Math.log(h/H)**2;if(h<H*.45||(j<n&&h>H*1.7))c+=10;
+    if(best[i]+c<best[j]){best[j]=best[i]+c;cut[j]=i}}
+  const rows=[];for(let j=n;j>0;j=cut[j]){const i=cut[j];const h=hOf(i,j);rows.unshift({items:seq.slice(i,j),h:j===n?Math.min(h,H):h})}
+  let pos=0;
+  return `<div class="wall" style="${style}">${rows.map(row=>`<div class="wrow">${row.items.map(x=>`<div class="wcell" style="width:${Math.floor(x.r*row.h+P)}px">${fn(x.w,pos++)}</div>`).join('')}</div>`).join('')}</div>`}
 let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(lastW&&Math.abs(main.clientWidth-lastW)>8)render()},120)});
 function render(){
   if(!S.settings)return;
