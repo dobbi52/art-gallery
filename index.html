@@ -99,8 +99,9 @@ h2{font-size:20px}
 .back:hover{color:var(--ink)}
 .boardhead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:28px}
 .actions{display:flex;flex-wrap:wrap;gap:8px}
-.wall{display:grid;grid-template-columns:repeat(var(--n,4),minmax(0,1fr));gap:24px;align-items:start}
-.wcol{display:flex;flex-direction:column;gap:28px;min-width:0}
+.wall{display:flex;flex-direction:column;gap:30px}
+.wrow{display:flex;gap:24px;align-items:flex-start}
+.wcell{flex:none;min-width:0}
 .frame{display:block;width:100%;margin:0;background:none;border:0;padding:0;text-align:left;position:relative}
 .frame .mat{display:block;background:var(--mat);border:1px solid var(--line);padding:10px;transition:border-color .2s,transform .25s}
 .frame:hover .mat{border-color:var(--line-strong);transform:translateY(-2px)}
@@ -256,8 +257,8 @@ img.fi.ok{opacity:1}
   .lb .stage{padding:18px}
   .lb .stage img{max-height:48vh}
   h1{font-size:25px}
-  .wall{gap:14px}
-  .wcol{gap:20px}
+  .wall{gap:20px}
+  .wrow{gap:12px}
 }
 @media print{
   @page{size:A4;margin:14mm}
@@ -422,13 +423,21 @@ function subscribe(){
 
 /* ---------- 화면 그리기 ---------- */
 const boardWorks=id=>S.works.filter(w=>w.boardId===id);
-/* 작품 벽: 칸 수를 정하고, 가장 짧은 칸에 차례로 걸어서 줄마다 꽉 차게 */
-let lastCols=0;
-const wallCols=()=>{const w=main.clientWidth;return w>=960?4:w>=640?3:2};
-function wall(list,fn,style=''){const n=wallCols();lastCols=n;const cols=Array.from({length:n},()=>({h:0,html:''}));
-  list.forEach((w,i)=>{const p=w.photos[0];const r=p.w&&p.h?p.h/p.w:1;const c=cols.reduce((a,b)=>b.h<a.h-0.001?b:a);c.html+=fn(w,i);c.h+=r+0.3});
-  return `<div class="wall" style="--n:${n};${style}">${cols.map(c=>`<div class="wcol">${c.html}</div>`).join('')}</div>`}
-addEventListener('resize',()=>{if(lastCols&&wallCols()!==lastCols)render()});
+/* 작품 벽: 미술관처럼 한 줄의 높이를 맞추고, 가로 작품은 넓게 세로 작품은 좁게 */
+let lastW=0;
+const wallGeo=()=>{const W=main.clientWidth;return W<640?{W,H:170,g:12}:W<960?{W,H:220,g:20}:{W,H:250,g:24}};
+function wall(list,fn,style=''){const {W,H,g}=wallGeo();lastW=W;const P=22;const rows=[];let cur=[],sum=0;
+  list.forEach((w,i)=>{const p=w.photos[0];const r=p.w&&p.h?p.w/p.h:1;const n=cur.length+1,s2=sum+r;
+    if(n>1&&s2*H+P*n+g*(n-1)>W){
+      const hW=(W-P*n-g*(n-1))/s2,hO=(W-P*(n-1)-g*(n-2))/sum;
+      if(hO<=H*1.35&&Math.abs(Math.log(hO/H))<Math.abs(Math.log(hW/H))){rows.push({items:cur,h:hO});cur=[{w,i,r}];sum=r}
+      else{cur.push({w,i,r});rows.push({items:cur,h:hW});cur=[];sum=0}
+      return}
+    cur.push({w,i,r});sum=s2;
+    if(n===1&&r*H+P>W){rows.push({items:cur,h:(W-P)/r});cur=[];sum=0}});
+  if(cur.length)rows.push({items:cur,h:H});
+  return `<div class="wall" style="${style}">${rows.map(row=>`<div class="wrow">${row.items.map(x=>`<div class="wcell" style="width:${Math.floor(x.r*row.h+P)}px">${fn(x.w,x.i)}</div>`).join('')}</div>`).join('')}</div>`}
+let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(lastW&&Math.abs(main.clientWidth-lastW)>8)render()},120)});
 function render(){
   if(!S.settings)return;
   $('#hdr').hidden=false;
