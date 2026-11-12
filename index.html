@@ -22,6 +22,7 @@ window.FIREBASE_CONFIG = {
 <!-- ▲▲▲ 여기까지 ▲▲▲ -->
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 :root{
   --wall:#F4F4F1;--panel:#FFFFFF;--mat:#FFFFFF;--ink:#1D1D1B;--muted:#6C6B65;--faint:#9A9992;
@@ -201,6 +202,15 @@ textarea{resize:vertical;min-height:72px}
 .expo .room-t{position:absolute;top:calc(env(safe-area-inset-top,0px) + 18px);left:max(24px,calc(env(safe-area-inset-left,0px) + 24px));font-family:var(--serif);font-size:14px;color:#9C9990}
 .fade{opacity:0}
 #printArea{display:none}
+.status{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px;margin-bottom:32px;display:flex;flex-direction:column;gap:10px}
+.st-head{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;justify-content:space-between}
+.st-head strong{font-weight:500}
+.st-chips{display:flex;flex-wrap:wrap;gap:6px}
+.st-chips button{border:1px solid var(--danger);color:var(--danger);background:none;border-radius:999px;padding:3px 11px;font-size:13px;font-variant-numeric:tabular-nums}
+.st-chips button:hover{background:var(--wall)}
+.st-chips.abs button{border-color:var(--line-strong);color:var(--faint)}
+.timer-opts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:16px}
+.timer-opts button{padding:14px 10px;font-size:15px}
 .lb .stage{position:relative}
 .zoombtn{position:absolute;top:12px;right:12px;z-index:2;background:var(--panel);border:1px solid var(--line-strong);border-radius:999px;padding:5px 12px;font-size:12.5px;color:var(--ink)}
 .zoombtn:hover{border-color:var(--ink)}
@@ -327,7 +337,7 @@ img.fi.ok{opacity:1}
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInAnonymously, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, onSnapshot, serverTimestamp, deleteField, writeBatch, arrayUnion } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, onSnapshot, serverTimestamp, deleteField, writeBatch, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 const $=s=>document.querySelector(s);
@@ -356,7 +366,11 @@ const roster=()=>S.settings?.roster||[];
 const nameOf=no=>roster()[no-1]||'';
 const toMs=t=>t?.toMillis?t.toMillis():Date.now();
 const likeCount=w=>Object.keys(w.likes||{}).length;
-const isOpen=()=>S.settings?.uploadOpen!==false;
+const isOpen=()=>S.settings?.uploadOpen!==false&&!(S.settings?.uploadUntil&&Date.now()>=S.settings.uploadUntil);
+const leftText=()=>{const m=Math.max(1,Math.ceil((S.settings.uploadUntil-Date.now())/60000));return m>=60?`${Math.floor(m/60)}시간${m%60?` ${m%60}분`:''}`:`${m}분`};
+function updateOpenBtn(){const ob=$('#openBtn');if(!ob||!S.settings)return;ob.hidden=S.role!=='teacher';const o=isOpen();ob.setAttribute('aria-pressed',o);
+  ob.innerHTML=`<span class="dot" aria-hidden="true"></span>학생 올리기 ${o?'열림':'닫힘'}${o&&S.settings.uploadUntil?` · ${leftText()} 남음`:''}`}
+setInterval(()=>{if(!S.settings?.uploadUntil)return;if(S._open!==isOpen())render();else updateOpenBtn()},15000);
 const canUpload=()=>S.role==='teacher'||isOpen();
 /* 움직임: 처음 보이는 것만 차례로 걸리고, 다시 그려도 이어서 움직여요 */
 const SHOWN=new Map();let viewKey='';
@@ -489,8 +503,7 @@ function render(){
   who.innerHTML=S.role==='teacher'?'선생님':`${S.me.no}번 ${esc(S.me.name)}<span class="chg">바꾸기</span>`;
   who.setAttribute('aria-label',S.role==='teacher'?'선생님':`${S.me.no}번 ${S.me.name}, 번호 바꾸기`);
   $('#adminBtn').hidden=S.role!=='teacher';
-  const ob=$('#openBtn');ob.hidden=S.role!=='teacher';ob.setAttribute('aria-pressed',isOpen());
-  ob.innerHTML=`<span class="dot" aria-hidden="true"></span>학생 올리기 ${isOpen()?'열림':'닫힘'}`;
+  S._open=isOpen();updateOpenBtn();
   const cur=S.year===S.settings.year;
   if(S.view==='board'&&!S.boards.find(b=>b.id===S.board))S.view='home';
   if(S.view==='topic'&&!S.featured.some(f=>f.topic===S.topic))S.view='featured';
@@ -524,12 +537,18 @@ function boardView(){
   const b=S.boards.find(x=>x.id===S.board);const ws=boardWorks(b.id);const cur=S.year===S.settings.year;
   const body=ws.length?`${wall(ws,(w,i)=>frame(w,false,i))}`:
     `<div class="empty"><h2>아직 걸린 작품이 없어요</h2><span>첫 작품을 올리면 이 벽에 걸려요.</span>${cur&&canUpload()?'<button class="btn primary" data-act="upload">작품 올리기</button>':''}</div>`;
-  const tActs=S.role==='teacher'?`<button class="btn" data-act="editBoard">전시실 이름 고치기</button>${cur?'<button class="btn" data-act="addItem">＋ 자료 넣기</button>':''}`:'';
+  const tActs=S.role==='teacher'?`<button class="btn" data-act="editBoard">전시실 이름 고치기</button>${cur?'<button class="btn" data-act="addItem">＋ 자료 넣기</button>':''}${ws.length?'<button class="btn" data-act="zipBoard">내려받기</button>':''}`:'';
   const its=itemsSection(b.id);
   return `<button class="back" data-act="home">← 전시실로</button>
     <div class="boardhead"${anim('head',0,'rise')}><div><p class="eyebrow">${b.when?esc(b.when)+' · ':''}작품 ${ws.length}점</p><h1>${esc(b.title)}</h1></div>
-    <div class="actions">${tActs}${expoList().length?'<button class="btn" data-act="expo">▶ 전시 모드</button>':''}${cur&&canUpload()?'<button class="btn primary" data-act="upload">＋ 작품 올리기</button>':''}${cur&&!canUpload()?'<span class="closed-note">지금은 구경만 할 수 있어요</span>':''}</div></div>${its}${its?`<div class="sechead"><h2>작품</h2><span class="meta">${ws.length}점</span></div>`:''}${body}`;
+    <div class="actions">${tActs}${expoList().length?'<button class="btn" data-act="expo">▶ 전시 모드</button>':''}${cur&&canUpload()?'<button class="btn primary" data-act="upload">＋ 작품 올리기</button>':''}${cur&&!canUpload()?'<span class="closed-note">지금은 구경만 할 수 있어요</span>':''}</div></div>${statusPanel(b,ws)}${its}${its?`<div class="sechead"><h2>작품</h2><span class="meta">${ws.length}점</span></div>`:''}${body}`;
 }
+function statusPanel(b,ws){if(S.role!=='teacher'||S.year!==S.settings.year)return '';const ro=roster();if(!ro.length)return '';
+  const done=new Set(ws.map(w=>w.no).filter(n=>n>0));const abs=new Set(b.absent||[]);
+  const notDone=ro.map((_,i)=>i+1).filter(no=>!done.has(no));const absL=notDone.filter(no=>abs.has(no)),miss=notDone.filter(no=>!abs.has(no));
+  return `<div class="status"${anim('stat',1,'rise')}><div class="st-head"><strong>제출 현황 <span class="meta">선생님만 보여요</span></strong><span class="meta">올림 ${done.size}명 · 안 올림 ${miss.length}명${absL.length?` · 결석 ${absL.length}명`:''} / ${ro.length}명</span></div>
+    ${miss.length?`<div class="st-chips">${miss.map(no=>`<button data-absent="${no}" aria-pressed="false">${no} ${esc(ro[no-1])}</button>`).join('')}</div><p class="meta" style="margin:0">안 올린 학생을 누르면 결석으로 옮겨져요.</p>`:`<p class="meta" style="margin:0">${absL.length?'결석한 학생을 빼고 모두 올렸어요.':'모두 올렸어요.'}</p>`}
+    ${absL.length?`<div class="st-chips abs">${absL.map(no=>`<button data-absent="${no}" aria-pressed="true">${no} ${esc(ro[no-1])} · 결석</button>`).join('')}</div>`:''}</div>`}
 function studentList(){return S.works.filter(w=>w.no===S.student)}
 
 /* 자료 */
@@ -822,6 +841,37 @@ async function saveEditWork(title,desc,boardId){
   }catch(e){up.busy=false;btn.disabled=false;btn.textContent='저장';fail(e)}
 }
 
+function openTimer(){openLayer(`<button class="x" data-act="close" aria-label="닫기">×</button><h2>학생 올리기 열기</h2><p class="sub">시간을 정하면 그 시간이 지나 저절로 닫혀요.</p>
+  <div class="timer-opts"><button class="btn" data-openfor="40">40분</button><button class="btn" data-openfor="60">1시간</button><button class="btn" data-openfor="120">2시간</button><button class="btn" data-openfor="0">닫을 때까지</button></div>
+  <div class="actions" style="justify-content:flex-end"><button class="btn" data-act="close">취소</button></div>`,'sheet','timer')}
+
+/* ---------- 내려받기 ---------- */
+const safe=t=>String(t||'').replace(/[\\/:*?"<>|\n\r\t]/g,'_').replace(/\s+/g,' ').trim().slice(0,40);
+const csvCell=v=>`"${String(v??'').replace(/"/g,'""')}"`;
+async function downloadZip(works,zipName,btn){
+  if(!works.length){toast('내려받을 작품이 없어요');return}
+  if(typeof JSZip==='undefined'){toast('내려받기 도구를 불러오지 못했어요. 새로고침해 주세요.');return}
+  const label=btn?.textContent;const zip=new JSZip();const used=new Set();const jobs=[];
+  const rows=[['전시실','번호','이름','제목','설명','하트','올린 날짜','숨김','파일'].map(csvCell).join(',')];
+  for(const w of works){const b=S.boards.find(x=>x.id===w.boardId);const folder=safe(b?.title||'전시실');
+    const who=w.no?`${String(w.no).padStart(2,'0')}번_${safe(w.name)}`:'선생님';const files=[];
+    w.photos.forEach((p,k)=>{const base=`${folder}/${who}${w.title?'_'+safe(w.title):''}${w.photos.length>1?'_'+(k+1):''}`;
+      let name=base+'.jpg',n=2;while(used.has(name))name=`${base}_${n++}.jpg`;used.add(name);files.push(name);jobs.push({name,url:p.url})});
+    const dt=w.createdAt?.toDate?w.createdAt.toDate():null;
+    rows.push([b?.title||'',w.no||'',w.name||'',w.title||'',w.desc||'',likeCount(w),dt?`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`:'',w.hidden?'숨김':'',files.join(' / ')].map(csvCell).join(','))}
+  let done=0;const set=()=>{if(btn)btn.textContent=`내려받는 중… ${done}/${jobs.length}`};
+  if(btn)btn.disabled=true;set();
+  try{
+    let i=0;const worker=async()=>{while(i<jobs.length){const j=jobs[i++];const r=await fetch(j.url);if(!r.ok)throw new Error('fetch '+r.status);zip.file(j.name,await r.blob(),{binary:true});done++;set()}};
+    await Promise.all([worker(),worker(),worker(),worker()]);
+    zip.file('작품목록.csv','﻿'+rows.join('\r\n'));
+    if(btn)btn.textContent='파일 묶는 중…';
+    const blob=await zip.generateAsync({type:'blob',compression:'STORE'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=zipName;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),60000);toast(`사진 ${jobs.length}장을 내려받았어요`)}
+  catch(e){console.error(e);toast('내려받지 못했어요. 인터넷 연결을 확인하고 다시 해 주세요.')}
+  finally{if(btn){btn.disabled=false;btn.textContent=label}}}
+
 /* ---------- 관리 ---------- */
 const newKey=()=>{const a=new Uint8Array(12);crypto.getRandomValues(a);return Array.from(a,x=>'abcdefghjkmnpqrstuvwxyz23456789'[x%31]).join('')};
 const joinUrl=()=>`${location.origin}${location.pathname}?k=${S.settings.joinKey}`;
@@ -850,6 +900,7 @@ function drawAdmin(){
       <div class="row"><div><strong>숨긴 작품 ${hid}점</strong><p>작품 창에서 다시 보이게 할 수 있어요.</p></div></div>
       <div class="row"><div><strong>미술관 이름과 반 명단</strong><p>${esc(s.className)} · ${s.year}학년도 · ${roster().length}명</p></div><button class="btn sm" data-act="editRoster">고치기</button></div>
       <div class="row"><div><strong>새 학년도 시작</strong><p>새 명단과 새 QR이 만들어지고, 지난 작품은 그대로 남아 선생님만 볼 수 있어요.</p></div><button class="btn sm" data-act="newYear">${s.year+1}학년도 시작</button></div>
+      <div class="row"><div><strong>${S.year}학년도 작품 전체 내려받기</strong><p>모든 전시실의 사진을 전시실별 폴더로 묶어 ZIP 파일로 받아요. 번호·이름·제목·설명이 담긴 작품목록.csv도 함께 들어 있어요. 학년 말 백업용으로 써 주세요.</p></div><button class="btn sm" data-act="zipYear">내려받기 (${S.works.length}점)</button></div>
       <div class="row"><div><strong>학생별 작품집</strong><p>학생별 모아보기에서 학생을 고르고 "작품집 인쇄·PDF"를 누르세요.</p></div></div>
       <div class="row"><div><strong>로그인 계정</strong><p>${esc(S.user.email||'')}</p></div><button class="btn sm" data-act="logout">로그아웃</button></div>
     </div>`,'sheet','admin');
@@ -1006,7 +1057,14 @@ document.addEventListener('click',async e=>{
   if(a==='repick'){const key=lsGet(KEY_STORE)||S.me?.key;stopSubs();
     try{const j=await getDoc(doc(db,'joins',key));if(!j.exists())return showScreen('badKey');S.join=j.data();S.repick=true;showPicker()}catch{showScreen('badKey')}return}
   if(a==='pickCancel'){S.repick=false;startStudent();return}
-  if(el.id==='openBtn'||a==='osw'){const on=!isOpen();await updateDoc(doc(db,'settings','class'),{uploadOpen:on});if(a==='osw')el.setAttribute('aria-checked',on);toast(on?'학생들이 작품을 올릴 수 있어요':'학생 올리기를 닫았어요. 이제 구경만 할 수 있어요');return}
+  if(el.id==='openBtn'){if(isOpen()){await updateDoc(doc(db,'settings','class'),{uploadOpen:false,uploadUntil:deleteField()});toast('학생 올리기를 닫았어요. 이제 구경만 할 수 있어요')}else openTimer();return}
+  if(a==='osw'){const on=!isOpen();await updateDoc(doc(db,'settings','class'),{uploadOpen:on,uploadUntil:deleteField()});el.setAttribute('aria-checked',on);toast(on?'학생들이 작품을 올릴 수 있어요':'학생 올리기를 닫았어요. 이제 구경만 할 수 있어요');return}
+  if(d.openfor!==undefined){const m=+d.openfor;await updateDoc(doc(db,'settings','class'),{uploadOpen:true,uploadUntil:m?Date.now()+m*60000:deleteField()});closeLayer();
+    toast(m?`학생 올리기를 열었어요. ${m>=60?m/60+'시간':m+'분'} 뒤 저절로 닫혀요`:'학생 올리기를 열었어요');return}
+  if(d.absent!==undefined){const no=+d.absent;const b=S.boards.find(x=>x.id===S.board);if(!b)return;const on=!(b.absent||[]).includes(no);
+    await updateDoc(doc(db,'boards',b.id),{absent:on?arrayUnion(no):arrayRemove(no)});return}
+  if(a==='zipBoard'){const b=S.boards.find(x=>x.id===S.board);await downloadZip(boardWorks(b.id),`${S.year}_${safe(b.title)}.zip`,el);return}
+  if(a==='zipYear'){await downloadZip(S.works,`${S.year}학년도_${safe(S.settings.className)}.zip`,el);return}
   if(el.id==='fab'||a==='upload'){openUpload();return}
   if(d.topic!==undefined){S.view='topic';S.topic=d.topic;render();scrollTo(0,0);return}
   if(d.play){openPlayer(d.play);return}
