@@ -400,7 +400,7 @@ import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL, del
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const main=$('#main');
-const KEY_STORE='artGalleryJoinKey';
+const KEY_STORE='artGalleryJoinKey',VIEW_STORE='artGalleryViewKey';
 const lsGet=k=>{try{return localStorage.getItem(k)}catch{return null}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v)}catch{}};
 
@@ -413,9 +413,12 @@ const params=new URLSearchParams(location.search);
 const urlKey=params.get('k');
 /* 선생님용 QR(?t=1)로 들어오면 학생 기억을 지우고 선생님 로그인 화면으로 */
 let wantTeacher=params.get('t')==='1';
-if(wantTeacher){try{localStorage.removeItem(KEY_STORE)}catch{}}
-else if(urlKey)lsSet(KEY_STORE,urlKey);
-if(urlKey||wantTeacher)history.replaceState(null,'',location.pathname);
+const urlView=params.get('view');
+const lsDel=k=>{try{localStorage.removeItem(k)}catch{}};
+if(wantTeacher){lsDel(KEY_STORE);lsDel(VIEW_STORE)}
+else if(urlView){lsSet(VIEW_STORE,urlView);lsDel(KEY_STORE)}
+else if(urlKey){lsSet(KEY_STORE,urlKey);lsDel(VIEW_STORE)}
+if(urlKey||wantTeacher||urlView)history.replaceState(null,'',location.pathname);
 
 const S={user:null,role:null,settings:null,me:null,join:null,year:null,view:'home',board:null,student:null,boards:[],works:[],subs:[],setSub:null,featured:[],featNames:{},items:[],topic:null};
 const uid=()=>S.user?.uid;
@@ -428,7 +431,7 @@ const leftText=()=>{const m=Math.max(1,Math.ceil((S.settings.uploadUntil-Date.no
 function updateOpenBtn(){const ob=$('#openBtn');if(!ob||!S.settings)return;ob.hidden=S.role!=='teacher';const o=isOpen();ob.setAttribute('aria-pressed',o);
   ob.innerHTML=`<span class="dot" aria-hidden="true"></span><span class="hide-m">학생&nbsp;</span>올리기 ${o?'열림':'닫힘'}${o&&S.settings.uploadUntil?` · ${leftText()}<span class="hide-m"> 남음</span>`:''}`}
 setInterval(()=>{if(!S.settings?.uploadUntil)return;if(S._open!==isOpen())render();else updateOpenBtn()},15000);
-const canUpload=()=>S.role==='teacher'||isOpen();
+const canUpload=()=>S.role==='teacher'||(S.role==='student'&&isOpen());
 /* 움직임: 처음 보이는 것만 차례로 걸리고, 다시 그려도 이어서 움직여요 */
 const SHOWN=new Map();let viewKey='';
 function anim(id,idx=0,kind='hang'){const now=performance.now();let r=SHOWN.get(id);
@@ -450,16 +453,17 @@ onAuthStateChanged(auth,async user=>{
   S.user=user;stopSubs();
   if(user&&user.isAnonymous&&wantTeacher){wantTeacher=false;await signOut(auth);return}
   if(!user){
-    if(lsGet(KEY_STORE)){try{await signInAnonymously(auth)}catch(e){showScreen('error')}return}
+    if(lsGet(KEY_STORE)||lsGet(VIEW_STORE)){try{await signInAnonymously(auth)}catch(e){showScreen('error')}return}
     return showScreen('landing');
   }
-  if(user.isAnonymous){S.role='student';startStudent()}else{S.role='teacher';startTeacher()}
+  if(user.isAnonymous){if(lsGet(VIEW_STORE)){S.role='viewer';startViewer()}else{S.role='student';startStudent()}}else{S.role='teacher';startTeacher()}
 });
 function showScreen(kind){
   $('#hdr').hidden=true;$('#fab').hidden=true;
   const T={
     landing:`<h1>우리 반 미술관</h1><p>학생은 선생님이 보여주는 QR 코드를 찍어서 들어와요.</p><button class="btn primary" data-act="login">선생님 로그인</button>`,
     notTeacher:`<h2>선생님 계정이 아니에요</h2><p>${esc(S.user?.email||'')} 계정으로는 들어올 수 없어요. 미술관을 만든 구글 계정으로 다시 로그인해 주세요.</p><button class="btn" data-act="logout">로그아웃</button>`,
+    badView:`<h2>관람 링크가 바뀌었어요</h2><p>선생님이 관람 링크를 새로 만들었거나 공유를 끝냈어요. 새 링크를 받아 주세요.</p>`,
     badKey:`<h2>QR이 바뀌었어요</h2><p>선생님이 새 QR을 만들었거나 학년도가 바뀌었어요. 선생님이 보여주는 새 QR을 다시 찍어 주세요.</p>`,
     error:`<h2>연결하지 못했어요</h2><p>인터넷 연결을 확인하고 새로고침해 주세요.</p>`,
     setup:`<h1>미술관 처음 만들기</h1><p>한 번만 하면 돼요. 명단은 나중에 관리 메뉴에서 고칠 수 있어요.</p>
@@ -478,6 +482,10 @@ async function startTeacher(){
   }catch(e){return showScreen('notTeacher')}
   purgeTrash().catch(e=>console.error(e));
 }
+async function startViewer(){const key=lsGet(VIEW_STORE);if(!key)return showScreen('badView');
+  try{const v=await getDoc(doc(db,'viewers',uid()));if(!v.exists()||v.data().key!==key)await setDoc(doc(db,'viewers',uid()),{key,at:serverTimestamp()});
+    const s=await getDoc(doc(db,'settings','class'));S.settings=s.data();S.year=S.settings.year;watchSettings();subscribe()}
+  catch(e){console.error(e);showScreen('badView')}}
 async function startStudent(){
   const key=lsGet(KEY_STORE);
   let m=null;
@@ -505,12 +513,12 @@ function watchSettings(){
     if(!s.exists())return;const old=S.settings?.year;S.settings=s.data();
     if(S.role==='student'&&S.settings.year!==old){S.year=S.settings.year;subscribe()}
     render();if($('.lb'))drawWork();
-  },()=>{if(S.role==='student'){stopSubs();showScreen('badKey')}});
+  },()=>{if(S.role!=='teacher'){stopSubs();showScreen(S.role==='viewer'?'badView':'badKey')}});
 }
 function stopSubs(){S.subs.forEach(u=>u());S.subs=[];S.setSub&&S.setSub();S.setSub=null;closeLayer()}
 function subscribe(){
   S.subs.forEach(u=>u());S.subs=[];S.boards=[];S.works=[];
-  const onErr=e=>{console.error(e);if(S.role==='student'){stopSubs();showScreen('badKey')}else toast('불러오지 못했어요. 새로고침해 주세요.')};
+  const onErr=e=>{console.error(e);if(S.role!=='teacher'){stopSubs();showScreen(S.role==='viewer'?'badView':'badKey')}else toast('불러오지 못했어요. 새로고침해 주세요.')};
   S.subs.push(onSnapshot(query(collection(db,'boards'),where('year','==',S.year)),q=>{
     S.boards=q.docs.map(d=>({id:d.id,...d.data()})).filter(b=>!b.trashed).sort((a,b)=>toMs(b.createdAt)-toMs(a.createdAt));render()},onErr));
   const wq=S.role==='teacher'?query(collection(db,'works'),where('year','==',S.year)):query(collection(db,'works'),where('year','==',S.year),where('hidden','==',false));
@@ -558,8 +566,9 @@ function render(){
   const fv=S.view==='featured'||S.view==='topic';
   $('#tabs').innerHTML=yrs.map(y=>`<button role="tab" data-y="${y}" aria-selected="${!fv&&y===S.year}">${y}학년도 미술관</button>`).join('')+`<span class="gap" aria-hidden="true"></span><button role="tab" data-act="tabFeat" aria-selected="${fv}">대표 작품실</button>`;
   const who=$('#who');who.classList.toggle('me',S.role==='student');
-  who.innerHTML=S.role==='teacher'?'선생님':`${S.me.no}번 ${esc(S.me.name)}<span class="chg">바꾸기</span>`;
-  who.setAttribute('aria-label',S.role==='teacher'?'선생님':`${S.me.no}번 ${S.me.name}, 번호 바꾸기`);
+  who.innerHTML=S.role==='teacher'?'선생님':S.role==='viewer'?'관람 중':`${S.me.no}번 ${esc(S.me.name)}<span class="chg">바꾸기</span>`;
+  who.classList.toggle('viewer',S.role==='viewer');
+  who.setAttribute('aria-label',S.role==='teacher'?'선생님':S.role==='viewer'?'관람 중':`${S.me.no}번 ${S.me.name}, 번호 바꾸기`);
   $('#adminBtn').hidden=S.role!=='teacher';
   S._open=isOpen();updateOpenBtn();
   const cur=S.year===S.settings.year;
@@ -599,7 +608,7 @@ function boardView(){
   const its=itemsSection(b.id);
   return `<button class="back" data-act="home">← 전시실로</button>
     <div class="boardhead"${anim('head',0,'rise')}><div>${b.when?`<p class="eyebrow">${esc(b.when)}</p>`:''}<h1>${esc(b.title)}</h1></div>
-    <div class="actions">${tActs}${expoList().length?'<button class="btn" data-act="expo">▶ 전시 모드</button>':''}${cur&&canUpload()?'<button class="btn primary" data-act="upload">＋ 작품 올리기</button>':''}${cur&&!canUpload()?'<span class="closed-note">지금은 구경만 할 수 있어요</span>':''}</div></div>${statusPanel(b,ws)}${its}<div class="sechead"><h2>작품</h2><span class="meta">${ws.length}점</span></div>${body}`;
+    <div class="actions">${tActs}${expoList().length?'<button class="btn" data-act="expo">▶ 전시 모드</button>':''}${cur&&canUpload()?'<button class="btn primary" data-act="upload">＋ 작품 올리기</button>':''}${cur&&S.role==='student'&&!canUpload()?'<span class="closed-note">지금은 구경만 할 수 있어요</span>':''}</div></div>${statusPanel(b,ws)}${its}<div class="sechead"><h2>작품</h2><span class="meta">${ws.length}점</span></div>${body}`;
 }
 function statusPanel(b,ws){if(S.role!=='teacher'||S.year!==S.settings.year)return '';const ro=roster();if(!ro.length)return '';
   const done=new Set(ws.map(w=>w.no).filter(n=>n>0));const abs=new Set(b.absent||[]);
@@ -677,7 +686,7 @@ function openWork(id,dir=0,mode){
   const fr=!dir&&document.querySelector(`[data-work="${id}"] .mat,[data-item="${id}"] .ic-media`);const from=fr&&fr.getBoundingClientRect();
   drawWork();
   if(from&&$('.lb'))flip($('.lb'),from);
-  if(ctx.mode==='work')ctx.csub=onSnapshot(collection(db,'works',id,'comments'),q=>{ctx.comments=q.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>toMs(a.createdAt)-toMs(b.createdAt));drawWork()},()=>{});
+  if(ctx.mode==='work'&&S.role!=='viewer')ctx.csub=onSnapshot(collection(db,'works',id,'comments'),q=>{ctx.comments=q.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>toMs(a.createdAt)-toMs(b.createdAt));drawWork()},()=>{});
 }
 function stageHtml(w){const ph=w.photos[Math.min(ctx.photo,w.photos.length-1)];
   return `<div class="stage"><button class="zoombtn" data-act="zoom">⛶ 전체 화면</button><div class="mat"><button class="zimgbtn" data-act="zoom" aria-label="전체 화면으로 크게 보기"><img src="${esc(ph.url)}" alt="${esc(w.title)}"></button></div>
@@ -717,10 +726,10 @@ function drawWork(){
       <p class="eyebrow" style="margin:0">${esc(b?.title||'')}</p>
       <div><h2>${esc(w.title||(w.no?`${w.no}번 ${w.name}`:b?.title||'작품'))}</h2>${w.no&&w.title?`<p class="meta" style="margin:4px 0 0">${w.no}번 ${esc(w.name)}</p>`:''}</div>
       ${w.desc?`<p class="desc">${esc(w.desc)}</p>`:''}
-      <button class="heart${performance.now()-(ctx.popT||0)<380?' pop':''}" style="animation-delay:-${Math.round(performance.now()-(ctx.popT||0))}ms" data-act="heart" aria-pressed="${liked}" ${cur&&!w.hidden?'':'disabled'}>${liked?'♥':'♡'} ${likeCount(w)}</button>
-      <div class="cmts"><strong style="font-weight:500;font-size:14px">한 줄 감상 ${ctx.comments.length}</strong>${cm||'<span class="meta">첫 감상을 남겨 보세요.</span>'}
+      <button class="heart${performance.now()-(ctx.popT||0)<380?' pop':''}" style="animation-delay:-${Math.round(performance.now()-(ctx.popT||0))}ms" data-act="heart" aria-pressed="${liked}" ${cur&&!w.hidden&&S.role!=='viewer'?'':'disabled'}>${liked?'♥':'♡'} ${likeCount(w)}</button>
+      ${S.role==='viewer'?'':`<div class="cmts"><strong style="font-weight:500;font-size:14px">한 줄 감상 ${ctx.comments.length}</strong>${cm||'<span class="meta">첫 감상을 남겨 보세요.</span>'}
         ${canC?`<form class="addc" id="cform"><input type="text" id="cinput" maxlength="40" placeholder="${t?'선생님 한마디':'좋았던 점을 한 줄로'}" aria-label="한 줄 감상"><button class="btn sm primary">남기기</button></form><span class="err" id="cerr"></span>`:
-        `<p class="note">${cur?'선생님이 감상 남기기를 잠시 꺼두었어요.':'지난 학년 작품에는 감상을 남길 수 없어요.'}</p>`}</div>
+        `<p class="note">${cur?'선생님이 감상 남기기를 잠시 꺼두었어요.':'지난 학년 작품에는 감상을 남길 수 없어요.'}</p>`}</div>`}
       ${t?`<div class="tadmin">${ctx.confirm?`<div class="confirm">이 작품을 휴지통으로 옮길까요? 30일 안에는 관리 창의 휴지통에서 되살릴 수 있어요. <button class="btn sm danger" data-act="delyes">휴지통으로</button><button class="btn sm" data-act="delno">취소</button></div>`:
         ctx.feat?featForm(b?.title||''):`${w.featured?`<p class="meta" style="flex-basis:100%;margin:0">대표 작품실 · ${esc(w.topic||'')}</p><button class="btn sm" data-act="unfeat">대표 작품에서 빼기</button>`:'<button class="btn sm" data-act="feat">대표 작품으로</button>'}<button class="btn sm" data-act="editWork">고치기</button>${b&&b.cover===w.id?'<button class="btn sm" data-act="uncover" aria-pressed="true">✓ 전시실 표지</button>':'<button class="btn sm" data-act="cover">전시실 표지로</button>'}<button class="btn sm" data-act="hide">${w.hidden?'다시 보이기':'숨기기'}</button><button class="btn sm danger" data-act="del">삭제</button>`}</div>`:''}
       <div class="nav"><button class="btn sm" data-act="prev" ${i===0?'disabled':''}>← 이전</button><span class="meta">${i+1} / ${list.length}</span><button class="btn sm" data-act="next" ${i===list.length-1?'disabled':''}>다음 →</button></div>
@@ -975,6 +984,7 @@ function drawTrash(){
 const newKey=()=>{const a=new Uint8Array(12);crypto.getRandomValues(a);return Array.from(a,x=>'abcdefghjkmnpqrstuvwxyz23456789'[x%31]).join('')};
 const joinUrl=()=>`${location.origin}${location.pathname}?k=${S.settings.joinKey}`;
 const teacherUrl=()=>`${location.origin}${location.pathname}?t=1`;
+const viewUrl=()=>`${location.origin}${location.pathname}?view=${S.settings.viewKey}`;
 function qrData(text,cell){const q=qrcode(0,'M');q.addData(text);q.make();return q.createDataURL(cell,2)}
 let adm={confirm:null,members:[]};
 async function loadMembers(){const q=await getDocs(collection(db,'members'));adm.members=q.docs.map(d=>({id:d.id,...d.data()})).filter(m=>m.key===S.settings.joinKey).sort((a,b)=>a.no-b.no||toMs(a.joinedAt)-toMs(b.joinedAt))}
@@ -998,6 +1008,10 @@ function drawAdmin(){
   const conf=(kind,msg,btn)=>c===kind?`<div class="confirm" style="flex-basis:100%">${msg} <button class="btn sm danger" data-act="${kind}Yes">${btn}</button><button class="btn sm" data-act="admNo">취소</button></div>`:'';
   openLayer(`<button class="x" data-act="close" aria-label="닫기">×</button><h2>관리</h2><p class="sub">선생님만 볼 수 있어요.</p>
     <div class="adm" id="admRoot">
+      <div class="row"><div><strong>관람 링크</strong><p>다른 선생님께 보내는 보기 전용 주소예요. 작품과 하트 수만 보이고, 올리기·하트·감상은 할 수 없어요.</p>
+        ${s.viewKey?`<p style="overflow-wrap:anywhere;font-size:12px">${esc(viewUrl())}</p>`:''}</div>
+        <div class="actions">${s.viewKey?'<button class="btn sm" data-act="vcopy">주소 복사</button><button class="btn sm" data-act="vqrbig">QR 보기</button><button class="btn sm" data-act="vnew">새로 만들기</button><button class="btn sm" data-act="voff">공유 끝내기</button>':'<button class="btn sm primary" data-act="vnew">관람 링크 만들기</button>'}</div>
+        ${conf('vnew','새로 만들면 예전 관람 링크로는 더 이상 볼 수 없어요.','새로 만들기')}${conf('voff','공유를 끝내면 지금 관람 링크로는 더 이상 볼 수 없어요.','공유 끝내기')}</div>
       <div class="row"><div class="qr"><img src="${qrData(joinUrl(),4)}" alt="학생 입장 QR"><div style="min-width:0;flex:1"><strong>학생 입장 QR</strong><p>찍으면 바로 들어와 작품을 보고 올릴 수 있어요.</p><p style="overflow-wrap:anywhere;font-size:12px">${esc(joinUrl())}</p></div></div>
         <div class="actions"><button class="btn sm" data-act="qrbig">크게 띄우기</button><button class="btn sm" data-act="copy">주소 복사</button><button class="btn sm" data-act="qrnew">QR 새로 만들기</button></div>
         ${conf('qrnew','새 QR을 만들면 지금 들어와 있는 학생들도 새 QR을 다시 찍어야 해요.','새로 만들기')}</div>
@@ -1204,7 +1218,7 @@ document.addEventListener('click',async e=>{
   if(d.ph){ctx.photo=+d.ph;drawWork();return}
   if(a==='prev'||a==='next'){step(a==='next'?1:-1);return}
   const w=S.works.find(x=>x.id===ctx.id);
-  if(a==='heart'&&w){const liked=!!w.likes?.[uid()];const l={...(w.likes||{})};if(liked)delete l[uid()];else{l[uid()]=true;ctx.popT=performance.now()}w.likes=l;drawWork();await updateDoc(doc(db,'works',w.id),{[`likes.${uid()}`]:liked?deleteField():true});return}
+  if(a==='heart'&&w&&S.role!=='viewer'){const liked=!!w.likes?.[uid()];const l={...(w.likes||{})};if(liked)delete l[uid()];else{l[uid()]=true;ctx.popT=performance.now()}w.likes=l;drawWork();await updateDoc(doc(db,'works',w.id),{[`likes.${uid()}`]:liked?deleteField():true});return}
   if(a==='hide'&&w){await updateDoc(doc(db,'works',w.id),{hidden:!w.hidden});toast(w.hidden?'다시 보이게 했어요':'학생들에게 안 보이게 숨겼어요');return}
   if(a==='del'){ctx.confirm=true;drawWork();return}
   if(a==='delno'){ctx.confirm=false;drawWork();return}
@@ -1261,6 +1275,12 @@ document.addEventListener('click',async e=>{
     catch(err){tr.busy=false;throw err}
     return}
   if(a==='csw'){const on=S.settings.commentsOn===false;await updateDoc(doc(db,'settings','class'),{commentsOn:on});el.setAttribute('aria-checked',on);toast(on?'한 줄 감상을 켰어요':'한 줄 감상을 껐어요');return}
+  if(a==='vcopy'){try{await navigator.clipboard.writeText(viewUrl());toast('관람 링크를 복사했어요')}catch{toast('복사하지 못했어요. 주소를 길게 눌러 복사해 주세요.')}return}
+  if(a==='vnew'){if(!S.settings.viewKey){await updateDoc(doc(db,'settings','class'),{viewKey:newKey()});drawAdmin();toast('관람 링크를 만들었어요');return}adm.confirm='vnew';drawAdmin();return}
+  if(a==='vnewYes'){await updateDoc(doc(db,'settings','class'),{viewKey:newKey()});adm.confirm=null;drawAdmin();toast('관람 링크를 새로 만들었어요. 예전 링크는 막혔어요');return}
+  if(a==='voff'){adm.confirm='voff';drawAdmin();return}
+  if(a==='voffYes'){await updateDoc(doc(db,'settings','class'),{viewKey:deleteField()});adm.confirm=null;drawAdmin();toast('관람 공유를 끝냈어요');return}
+  if(a==='vqrbig'){const ov=document.createElement('div');ov.className='bigqr';ov.innerHTML=`<h2>${esc(S.settings.className)} 관람</h2><img src="${qrData(viewUrl(),10)}" alt="관람 링크 QR"><p style="margin:0;color:#444">휴대폰 카메라로 찍으면 작품을 볼 수 있어요</p><button data-act="bigclose">닫기</button>`;document.body.appendChild(ov);return}
   if(a==='qrbig'||a==='tqrbig'){const t=a==='tqrbig';const ov=document.createElement('div');ov.className='bigqr';
     ov.innerHTML=`<h2>${t?'선생님용 접속':esc(S.settings.className)}</h2><img src="${qrData(t?teacherUrl():joinUrl(),10)}" alt="${t?'선생님용 접속 QR':'학생 입장 QR'}"><p style="margin:0;color:#444">${t?'선생님 휴대폰으로 찍고 구글 계정으로 로그인하세요':'휴대폰 카메라로 찍어서 들어오세요'}</p><button data-act="bigclose">닫기</button>`;document.body.appendChild(ov);return}
   if(a==='bigclose'){$('.bigqr')?.remove();return}

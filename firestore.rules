@@ -18,10 +18,17 @@ service cloud.firestore {
         && get(memberPath()).data.key == settings().joinKey;
     }
     function me() { return get(memberPath()).data; }
+    // 관람 링크로 들어온 기기 (보기만)
+    function viewerPath() { return /databases/$(db)/documents/viewers/$(request.auth.uid); }
+    function isViewer() {
+      return signedIn() && exists(viewerPath())
+        && settings().get('viewKey', '') != ''
+        && get(viewerPath()).data.key == settings().get('viewKey', '');
+    }
 
     // 미술관 설정 (이름, 학년도, 명단, 현재 QR 열쇠, 감상 켜기)
     match /settings/class {
-      allow read: if isTeacher() || isMember();
+      allow read: if isTeacher() || isMember() || isViewer();
       allow write: if isTeacher();
     }
 
@@ -30,6 +37,16 @@ service cloud.firestore {
       allow get: if signedIn();
       allow list: if false;
       allow write: if isTeacher();
+    }
+
+    // 관람 링크 기기 - 자기 기록만 만들 수 있고 다른 건 쓸 수 없음
+    match /viewers/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isTeacher());
+      allow list, delete: if isTeacher();
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['key', 'at'])
+        && settings().get('viewKey', '') != ''
+        && request.resource.data.key == settings().get('viewKey', '');
     }
 
     // 들어온 학생 기기 (번호 고르기)
@@ -47,14 +64,14 @@ service cloud.firestore {
 
     // 전시실 - 학생은 올해 것만 보기, 만들기와 고치기는 선생님만
     match /boards/{id} {
-      allow read: if isTeacher() || (isMember() && resource.data.year == settings().year);
+      allow read: if isTeacher() || ((isMember() || isViewer()) && resource.data.year == settings().year);
       allow write: if isTeacher();
     }
 
     // 작품 - 학생은 올리기와 하트만, 숨기기와 삭제는 선생님만
     match /works/{id} {
       allow read: if isTeacher()
-        || (isMember() && resource.data.year == settings().year && resource.data.hidden == false);
+        || ((isMember() || isViewer()) && resource.data.year == settings().year && resource.data.hidden == false);
       allow create: if isTeacher() || (isMember() && validNewWork(request.resource.data));
       allow update: if isTeacher()
         || (isMember()
@@ -88,7 +105,7 @@ service cloud.firestore {
 
     // 대표 작품실 - 학생은 보기만, 이름은 들어 있지 않음
     match /featured/{id} {
-      allow read: if isTeacher() || isMember();
+      allow read: if isTeacher() || isMember() || isViewer();
       allow write: if isTeacher();
     }
 
