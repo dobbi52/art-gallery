@@ -199,6 +199,20 @@ textarea{resize:vertical;min-height:72px}
 .expo .room-t{position:absolute;top:calc(env(safe-area-inset-top,0px) + 18px);left:max(24px,calc(env(safe-area-inset-left,0px) + 24px));font-family:var(--serif);font-size:14px;color:#9C9990}
 .fade{opacity:0}
 #printArea{display:none}
+.slot .ed{position:absolute;left:4px;right:4px;bottom:4px;background:rgba(255,255,255,.92);color:#1D1D1B;border:0;border-radius:4px;font-size:11.5px;padding:5px 2px;z-index:2}
+.cropper{background:var(--panel);width:100%;max-width:820px;max-height:100%;overflow:auto;border-radius:6px;padding:20px;display:flex;flex-direction:column;gap:14px}
+.crop-stage{position:relative;align-self:center;overflow:hidden;touch-action:none;background:var(--wall);user-select:none;-webkit-user-select:none}
+.crop-stage canvas{display:block}
+.cbox{position:absolute;box-shadow:0 0 0 9999px rgba(0,0,0,.55);outline:1.5px solid #fff;cursor:move;touch-action:none}
+.cbox::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(to right,transparent calc(33.33% - .5px),rgba(255,255,255,.55) calc(33.33% - .5px),rgba(255,255,255,.55) calc(33.33% + .5px),transparent calc(33.33% + .5px),transparent calc(66.66% - .5px),rgba(255,255,255,.55) calc(66.66% - .5px),rgba(255,255,255,.55) calc(66.66% + .5px),transparent calc(66.66% + .5px)),
+  linear-gradient(to bottom,transparent calc(33.33% - .5px),rgba(255,255,255,.55) calc(33.33% - .5px),rgba(255,255,255,.55) calc(33.33% + .5px),transparent calc(33.33% + .5px),transparent calc(66.66% - .5px),rgba(255,255,255,.55) calc(66.66% - .5px),rgba(255,255,255,.55) calc(66.66% + .5px),transparent calc(66.66% + .5px))}
+.cbox span{position:absolute;width:26px;height:26px;border:4px solid #fff}
+.cbox .h-nw{top:-4px;left:-4px;border-right:0;border-bottom:0;cursor:nwse-resize}
+.cbox .h-ne{top:-4px;right:-4px;border-left:0;border-bottom:0;cursor:nesw-resize}
+.cbox .h-sw{bottom:-4px;left:-4px;border-right:0;border-top:0;cursor:nesw-resize}
+.cbox .h-se{bottom:-4px;right:-4px;border-left:0;border-top:0;cursor:nwse-resize}
+.crop-tools{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center}
 .items{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;margin-bottom:40px}
 .ic{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden;min-width:0}
 .ic-main{display:flex;flex-direction:column;text-align:left;color:inherit;text-decoration:none;background:none;border:0;padding:0;flex:1;font:inherit;width:100%}
@@ -625,9 +639,10 @@ function openEditWork(id){const w=S.works.find(x=>x.id===id);if(!w)return;
   up={photos:w.photos.map(p=>({old:p,preview:p.thumb})),board:w.boardId,busy:false,edit:w};$('#ov')?.remove();ctx.csub&&ctx.csub();ctx.csub=null;ctx.id=null;drawUpload()}
 function drawUpload(err=''){
   const e=up.edit;
-  const t=$('#utitle')?.value??e?.title??'',d=$('#udesc')?.value??e?.desc??'',no=$('#uno')?.value??(e?String(e.no||0):undefined);
+  const v=up.vals||{};
+  const t=$('#utitle')?.value??v.t??e?.title??'',d=$('#udesc')?.value??v.d??e?.desc??'',no=$('#uno')?.value??v.no??(e?String(e.no||0):undefined);
   const slots=[0,1,2].map(k=>{const p=up.photos[k];const label=['완성작','부분 확대','과정'][k];
-    return p?`<div class="slot filled" style="background-image:url('${esc(p.preview)}')"><button class="rm" data-rm="${k}" aria-label="${label} 사진 빼기">×</button></div>`:
+    return p?`<div class="slot filled" style="background-image:url('${esc(p.preview)}')"><button class="rm" data-rm="${k}" aria-label="${label} 사진 빼기">×</button><button type="button" class="ed" data-crop="${k}">자르기·회전</button></div>`:
     `<label class="slot"><input type="file" accept="image/*" data-slot="${k}" ${k>up.photos.length?'disabled':''} aria-label="${label} 사진"><span style="font-size:20px">＋</span><span>${label}${k?' (선택)':''}</span></label>`}).join('');
   const sub=e?'사진을 빼고 새로 넣거나, 번호와 설명을 고칠 수 있어요. 하트와 감상은 그대로 남아요.':S.role==='teacher'?'학생을 고르면 그 학생 작품으로 걸려요. 고르지 않으면 이름 없이 걸려요.':`올리는 사람: ${S.me.no}번 ${esc(S.me.name)}`;
   openLayer(`<button class="x" data-act="close" aria-label="닫기">×</button>
@@ -645,7 +660,7 @@ function resized(im,max,q){return new Promise(res=>{const k=Math.min(1,max/Math.
   c.width=Math.round(im.naturalWidth*k);c.height=Math.round(im.naturalHeight*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);c.toBlob(b=>res({blob:b,w:c.width,h:c.height}),'image/jpeg',q)})}
 async function addPhoto(file){
   try{const im=await loadImage(file);const full=await resized(im,2400,.9);const thumb=await resized(im,800,.82);
-    up.photos.push({full,thumb,preview:URL.createObjectURL(thumb.blob)});drawUpload()}
+    up.photos.push({full,thumb,preview:URL.createObjectURL(thumb.blob),img:im});drawUpload()}
   catch{drawUpload('이 사진은 열 수 없어요. 다른 사진을 골라 주세요.')}
 }
 async function submitUpload(){
@@ -668,6 +683,60 @@ async function submitUpload(){
     closeLayer();S.view='board';S.board=boardId;render();scrollTo(0,0);toast('작품을 벽에 걸었어요');
   }catch(e){up.busy=false;btn.disabled=false;btn.textContent='벽에 걸기';fail(e)}
 }
+
+/* ---------- 자르기·회전 ---------- */
+let cr=null;
+function rotDraw(x,img,rot,W,H){
+  if(rot===90){x.translate(H,0);x.rotate(Math.PI/2)}else if(rot===180){x.translate(W,H);x.rotate(Math.PI)}else if(rot===270){x.translate(0,W);x.rotate(-Math.PI/2)}
+  x.drawImage(img,0,0)}
+function loadRemote(url){return new Promise((res,rej)=>{const im=new Image();im.crossOrigin='anonymous';im.onload=()=>res(im);im.onerror=rej;im.src=url+(url.includes('?')?'&':'?')+'cors='+Date.now()})}
+async function openCrop(k){const p=up.photos[k];if(!p)return;
+  up.vals={t:$('#utitle')?.value,d:$('#udesc')?.value,no:$('#uno')?.value};up.board=$('#uboard')?.value||up.board;
+  let img=p.img;
+  if(!img){const b=document.querySelector(`[data-crop="${k}"]`);if(b)b.textContent='불러오는 중…';
+    try{img=await loadRemote(p.old.url);p.img=img}catch{if(b)b.textContent='자르기·회전';$('#uerr').textContent='이미 올린 사진은 저장소 설정을 한 번 바꿔야 편집할 수 있어요.';return}}
+  cr={k,img,rot:p.state?.rot||0,box:p.state?{...p.state.box}:{x:0,y:0,w:1,h:1},rk:p.state?.rk||'free'};drawCrop()}
+function cropRatio(){return cr.rk==='orig'?cr.rw/cr.rh:cr.rk==='sq'?1:null}
+function fitRatio(){const r=cropRatio();if(!r)return;const rn=r*cr.rh/cr.rw;let w=1,h=1/rn;if(h>1){h=1;w=rn}cr.box={x:(1-w)/2,y:(1-h)/2,w,h}}
+function drawCrop(){const W=cr.img.naturalWidth,H=cr.img.naturalHeight;cr.rw=cr.rot%180?H:W;cr.rh=cr.rot%180?W:H;
+  openLayer(`<h2>자르기·회전</h2>
+    <div class="crop-stage" id="cstage"><canvas id="ccv"></canvas><div class="cbox" id="cbox">${['nw','ne','sw','se'].map(h=>`<span data-h="${h}" class="h-${h}"></span>`).join('')}</div></div>
+    <div class="crop-tools"><button class="btn sm" data-act="rotL">↺ 왼쪽으로</button><button class="btn sm" data-act="rotR">↻ 오른쪽으로</button>
+      <span class="seg2" style="margin:0">${[['free','자유'],['orig','원래 비율'],['sq','정사각형']].map(([k,l])=>`<button type="button" data-ratio="${k}" aria-pressed="${cr.rk===k}">${l}</button>`).join('')}</span>
+      <button class="btn sm" data-act="cropReset">처음대로</button></div>
+    <p class="meta" style="margin:0;text-align:center">모서리를 끌어서 범위를 정하고, 가운데를 끌어서 옮겨요.</p>
+    <div class="actions" style="justify-content:flex-end"><button class="btn" data-act="cropCancel">취소</button><button class="btn primary" data-act="cropApply" id="capply">적용</button></div>`,'cropper','crop');
+  const st=$('#cstage'),cv=$('#ccv');const avail=$('.cropper').clientWidth-40,maxH=Math.min(innerHeight*.58,620);
+  const sc=Math.min(avail/cr.rw,maxH/cr.rh);const cw=Math.max(1,Math.round(cr.rw*sc)),ch=Math.max(1,Math.round(cr.rh*sc));const dpr=devicePixelRatio||1;
+  cv.width=Math.round(cw*dpr);cv.height=Math.round(ch*dpr);cv.style.width=cw+'px';cv.style.height=ch+'px';st.style.width=cw+'px';st.style.height=ch+'px';
+  const x=cv.getContext('2d');x.imageSmoothingQuality='high';x.scale(cv.width/cr.rw,cv.height/cr.rh);rotDraw(x,cr.img,cr.rot,W,H);
+  placeBox();bindCrop()}
+function placeBox(){const b=cr.box,el=$('#cbox');if(!el)return;Object.assign(el.style,{left:b.x*100+'%',top:b.y*100+'%',width:b.w*100+'%',height:b.h*100+'%'})}
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+function moveBox(b,hd,dx,dy){const M=.05;
+  if(hd==='move')return {x:clamp(b.x+dx,0,1-b.w),y:clamp(b.y+dy,0,1-b.h),w:b.w,h:b.h};
+  let L=b.x,T=b.y,Rr=b.x+b.w,B=b.y+b.h;
+  if(hd.includes('w'))L=clamp(L+dx,0,Rr-M);if(hd.includes('e'))Rr=clamp(Rr+dx,L+M,1);
+  if(hd.includes('n'))T=clamp(T+dy,0,B-M);if(hd.includes('s'))B=clamp(B+dy,T+M,1);
+  const r=cropRatio();
+  if(r){const rn=r*cr.rh/cr.rw;let nw=Rr-L,nh=nw/rn;
+    if(hd.includes('n'))T=B-nh;else B=T+nh;
+    const fix=()=>{nw=nh*rn;if(hd.includes('w'))L=Rr-nw;else Rr=L+nw};
+    if(T<0){T=0;nh=B-T;fix()}if(B>1){B=1;nh=B-T;fix()}}
+  return {x:L,y:T,w:Rr-L,h:B-T}}
+function bindCrop(){const st=$('#cstage'),bx=$('#cbox');let d=null;
+  bx.addEventListener('pointerdown',e=>{e.preventDefault();d={hd:e.target.dataset.h||'move',x:e.clientX,y:e.clientY,b:{...cr.box},W:st.clientWidth,H:st.clientHeight};try{bx.setPointerCapture(e.pointerId)}catch{}});
+  bx.addEventListener('pointermove',e=>{if(!d)return;cr.box=moveBox(d.b,d.hd,(e.clientX-d.x)/d.W,(e.clientY-d.y)/d.H);placeBox()});
+  const end=()=>{d=null};bx.addEventListener('pointerup',end);bx.addEventListener('pointercancel',end)}
+function cancelCrop(){cr=null;drawUpload()}
+async function applyCrop(){const btn=$('#capply');btn.disabled=true;btn.textContent='적용하는 중…';
+  const {img,rot,box,rw,rh}=cr;const W=img.naturalWidth,H=img.naturalHeight;const sx=box.x*rw,sy=box.y*rh,sw=box.w*rw,sh=box.h*rh;
+  const out=(max,q)=>new Promise((res,rej)=>{try{const k=Math.min(1,max/Math.max(sw,sh));const c=document.createElement('canvas');
+    c.width=Math.max(1,Math.round(sw*k));c.height=Math.max(1,Math.round(sh*k));const x=c.getContext('2d');x.imageSmoothingQuality='high';
+    x.scale(k,k);x.translate(-sx,-sy);rotDraw(x,img,rot,W,H);c.toBlob(b=>b?res({blob:b,w:c.width,h:c.height}):rej(new Error('blob')),'image/jpeg',q)}catch(e){rej(e)}});
+  try{const full=await out(2400,.9),thumb=await out(800,.82);
+    up.photos[cr.k]={full,thumb,preview:URL.createObjectURL(thumb.blob),img,state:{rot,box:{...box},rk:cr.rk}};cr=null;drawUpload()}
+  catch(e){console.error(e);btn.disabled=false;btn.textContent='적용';toast('이 사진은 편집할 수 없어요')}}
 
 async function saveEditWork(title,desc,boardId){
   const w=up.edit;const no=+$('#uno').value,name=nameOf(no);
@@ -911,6 +980,12 @@ document.addEventListener('click',async e=>{
     for(const p of w.photos){for(const path of [p.path,p.thumbPath]){try{await deleteObject(ref(st,path))}catch{}}}
     closeLayer();toast('작품을 삭제했어요');return}
   if(d.delc&&ctx.id){await deleteDoc(doc(db,'works',ctx.id,'comments',d.delc));return}
+  if(d.crop!==undefined){openCrop(+d.crop);return}
+  if(a==='rotL'||a==='rotR'){cr.rot=(cr.rot+(a==='rotR'?90:270))%360;cr.box={x:0,y:0,w:1,h:1};const W=cr.img.naturalWidth,H=cr.img.naturalHeight;cr.rw=cr.rot%180?H:W;cr.rh=cr.rot%180?W:H;fitRatio();drawCrop();return}
+  if(d.ratio){cr.rk=d.ratio;cr.box={x:0,y:0,w:1,h:1};fitRatio();drawCrop();return}
+  if(a==='cropReset'){cr.rot=0;cr.rk='free';cr.box={x:0,y:0,w:1,h:1};drawCrop();return}
+  if(a==='cropCancel'){cancelCrop();return}
+  if(a==='cropApply'){applyCrop();return}
   if(d.rm!==undefined){up.photos.splice(+d.rm,1);drawUpload();return}
   if(a==='submit'){submitUpload();return}
   if(a==='newBoard'){openBoardForm(false);return}
@@ -974,9 +1049,9 @@ document.addEventListener('change',async e=>{
 document.addEventListener('keydown',e=>{
   if($('.bigqr')&&e.key==='Escape'){$('.bigqr').remove();return}
   if($('#expo')){if(e.key==='Escape')closeExpo();if(e.key==='ArrowRight'||e.key==='ArrowLeft'){ex.i=(ex.i+(e.key==='ArrowRight'?1:-1)+ex.list.length)%ex.list.length;showExpo();tick()}return}
-  if(!$('#ov'))return;if(e.key==='Escape'&&!up.busy&&!itf.busy&&!bf.busy)closeLayer();
+  if(!$('#ov'))return;if($('.cropper')){if(e.key==='Escape')cancelCrop();return}if(e.key==='Escape'&&!up.busy&&!itf.busy&&!bf.busy)closeLayer();
   if($('.lb')&&document.activeElement?.tagName!=='INPUT'){if(e.key==='ArrowRight')step(1);if(e.key==='ArrowLeft')step(-1)}});
-document.addEventListener('mousedown',e=>{if(e.target.id==='ov'&&!up.busy&&!itf.busy&&!bf.busy)closeLayer()});
+document.addEventListener('mousedown',e=>{if(e.target.id==='ov'&&!up.busy&&!itf.busy&&!bf.busy&&!$('.cropper'))closeLayer()});
 </script>
 </body>
 </html>
