@@ -553,8 +553,8 @@ function boardView(){
   const tActs=S.role==='teacher'?`<button class="btn" data-act="editBoard">전시실 이름 고치기</button>${cur?'<button class="btn" data-act="addItem">＋ 자료 넣기</button>':''}${ws.length?'<button class="btn" data-act="zipBoard">내려받기</button>':''}`:'';
   const its=itemsSection(b.id);
   return `<button class="back" data-act="home">← 전시실로</button>
-    <div class="boardhead"${anim('head',0,'rise')}><div><p class="eyebrow">${b.when?esc(b.when)+' · ':''}작품 ${ws.length}점</p><h1>${esc(b.title)}</h1></div>
-    <div class="actions">${tActs}${expoList().length?'<button class="btn" data-act="expo">▶ 전시 모드</button>':''}${cur&&canUpload()?'<button class="btn primary" data-act="upload">＋ 작품 올리기</button>':''}${cur&&!canUpload()?'<span class="closed-note">지금은 구경만 할 수 있어요</span>':''}</div></div>${statusPanel(b,ws)}${its}${its?`<div class="sechead"><h2>작품</h2><span class="meta">${ws.length}점</span></div>`:''}${body}`;
+    <div class="boardhead"${anim('head',0,'rise')}><div>${b.when?`<p class="eyebrow">${esc(b.when)}</p>`:''}<h1>${esc(b.title)}</h1></div>
+    <div class="actions">${tActs}${expoList().length?'<button class="btn" data-act="expo">▶ 전시 모드</button>':''}${cur&&canUpload()?'<button class="btn primary" data-act="upload">＋ 작품 올리기</button>':''}${cur&&!canUpload()?'<span class="closed-note">지금은 구경만 할 수 있어요</span>':''}</div></div>${statusPanel(b,ws)}${its}<div class="sechead"><h2>작품</h2><span class="meta">${ws.length}점</span></div>${body}`;
 }
 function statusPanel(b,ws){if(S.role!=='teacher'||S.year!==S.settings.year)return '';const ro=roster();if(!ro.length)return '';
   const done=new Set(ws.map(w=>w.no).filter(n=>n>0));const abs=new Set(b.absent||[]);
