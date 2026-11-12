@@ -66,6 +66,10 @@ header.top .inner:first-child{display:flex;flex-wrap:wrap;gap:12px 24px;align-it
 .openbtn[aria-pressed="true"] .dot{background:var(--on-open);animation:blink 1.6s ease-in-out infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
 .closed-note{font-size:13px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:6px 12px;align-self:center}
+button.who{background:var(--panel);font:inherit;font-size:13px;color:var(--muted)}
+.who:not(.me){cursor:default}
+.who.me:hover{border-color:var(--ink);color:var(--ink)}
+.who.me .chg{color:var(--accent);margin-left:6px}
 .who{font-size:13px;color:var(--muted);padding:4px 10px;border:1px solid var(--line);border-radius:999px;white-space:nowrap}
 .btn{border:1px solid var(--line-strong);background:var(--panel);border-radius:4px;padding:8px 14px;font-size:14px;display:inline-flex;gap:6px;align-items:center;justify-content:center;white-space:nowrap}
 .btn:hover:not(:disabled){border-color:var(--ink)}
@@ -279,7 +283,7 @@ img.fi.ok{opacity:1}
 <header class="top gut" id="hdr" hidden><div class="inner">
   <button class="brand" id="home"><small id="yearLabel"></small><strong id="clsName">우리 반 미술관</strong></button>
   <div class="hright">
-    <span class="who" id="who"></span>
+    <button class="who" id="who"></button>
     <button class="btn sm openbtn" id="openBtn" hidden></button>
     <button class="btn sm" id="adminBtn" hidden>관리</button>
   </div>
@@ -389,6 +393,7 @@ function showPicker(){
   $('#hdr').hidden=true;$('#fab').hidden=true;
   main.innerHTML=`<div class="screen" style="max-width:760px"><h1>${esc(S.join.className||'우리 반 미술관')}에 오신 걸 환영해요</h1>
     <p>내 번호를 골라 주세요. 이 기기에 기억돼서 다음부터는 바로 들어와요.</p>
+    ${S.repick?'<button class="btn" data-act="pickCancel" style="align-self:flex-start">취소하고 돌아가기</button>':''}
     <div class="picker">${(S.join.roster||[]).map((n,i)=>`<button data-pick="${i+1}"><b>${i+1}</b><span>${esc(n)}</span></button>`).join('')}</div></div>`;
 }
 function watchSettings(){
@@ -446,7 +451,9 @@ function render(){
   const yrs=S.role==='teacher'?[...new Set([...(S.settings.years||[]),S.settings.year])].sort((a,b)=>b-a):[S.settings.year];
   const fv=S.view==='featured'||S.view==='topic';
   $('#tabs').innerHTML=yrs.map(y=>`<button role="tab" data-y="${y}" aria-selected="${!fv&&y===S.year}">${y}학년도 미술관</button>`).join('')+`<span class="gap" aria-hidden="true"></span><button role="tab" data-act="tabFeat" aria-selected="${fv}">대표 작품실</button>`;
-  $('#who').textContent=S.role==='teacher'?'선생님':`${S.me.no}번 ${S.me.name}`;
+  const who=$('#who');who.classList.toggle('me',S.role==='student');
+  who.innerHTML=S.role==='teacher'?'선생님':`${S.me.no}번 ${esc(S.me.name)}<span class="chg">바꾸기</span>`;
+  who.setAttribute('aria-label',S.role==='teacher'?'선생님':`${S.me.no}번 ${S.me.name}, 번호 바꾸기`);
   $('#adminBtn').hidden=S.role!=='teacher';
   const ob=$('#openBtn');ob.hidden=S.role!=='teacher';ob.setAttribute('aria-pressed',isOpen());
   ob.innerHTML=`<span class="dot" aria-hidden="true"></span>학생 올리기 ${isOpen()?'열림':'닫힘'}`;
@@ -827,12 +834,19 @@ document.addEventListener('click',async e=>{
     b.set(doc(db,'settings','class'),{className:name,year,years:[year],roster:list,joinKey:key,commentsOn:true});
     b.set(doc(db,'joins',key),{className:name,year,roster:list});
     await b.commit();startTeacher();return}
-  if(d.pick){const no=+d.pick;const key=lsGet(KEY_STORE);
+  if(d.pick){const no=+d.pick;const key=lsGet(KEY_STORE);S.repick=false;
     try{await setDoc(doc(db,'members',uid()),{key,no,name:S.join.roster[no-1],joinedAt:serverTimestamp()});startStudent()}catch(err){fail(err)}return}
   if(el.id==='home'||a==='home'){S.view='home';render();scrollTo(0,0);return}
   if(d.y){const y=+d.y;S.view='home';if(y!==S.year){S.year=y;subscribe()}else render();scrollTo(0,0);return}
   if(a==='tabFeat'){S.view='featured';render();scrollTo(0,0);return}
   if(el.id==='adminBtn'){openAdmin();return}
+  if(el.id==='who'){if(S.role!=='student')return;
+    openLayer(`<button class="x" data-act="close" aria-label="닫기">×</button><h2>번호 바꾸기</h2>
+      <p class="sub">지금 ${S.me.no}번 ${esc(S.me.name)}(으)로 들어와 있어요. 번호를 잘못 골랐다면 다시 고를 수 있어요. 이미 올린 작품은 그대로예요.</p>
+      <div class="actions" style="justify-content:flex-end"><button class="btn" data-act="close">취소</button><button class="btn primary" data-act="repick">번호 다시 고르기</button></div>`,'sheet','repick');return}
+  if(a==='repick'){const key=lsGet(KEY_STORE)||S.me?.key;stopSubs();
+    try{const j=await getDoc(doc(db,'joins',key));if(!j.exists())return showScreen('badKey');S.join=j.data();S.repick=true;showPicker()}catch{showScreen('badKey')}return}
+  if(a==='pickCancel'){S.repick=false;startStudent();return}
   if(el.id==='openBtn'||a==='osw'){const on=!isOpen();await updateDoc(doc(db,'settings','class'),{uploadOpen:on});if(a==='osw')el.setAttribute('aria-checked',on);toast(on?'학생들이 작품을 올릴 수 있어요':'학생 올리기를 닫았어요. 이제 구경만 할 수 있어요');return}
   if(el.id==='fab'||a==='upload'){openUpload();return}
   if(d.topic!==undefined){S.view='topic';S.topic=d.topic;render();scrollTo(0,0);return}
