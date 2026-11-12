@@ -617,7 +617,7 @@ function loadImage(file){return new Promise((res,rej)=>{const u=URL.createObject
 function resized(im,max,q){return new Promise(res=>{const k=Math.min(1,max/Math.max(im.naturalWidth,im.naturalHeight));const c=document.createElement('canvas');
   c.width=Math.round(im.naturalWidth*k);c.height=Math.round(im.naturalHeight*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);c.toBlob(b=>res({blob:b,w:c.width,h:c.height}),'image/jpeg',q)})}
 async function addPhoto(file){
-  try{const im=await loadImage(file);const full=await resized(im,1600,.85);const thumb=await resized(im,640,.8);
+  try{const im=await loadImage(file);const full=await resized(im,2400,.9);const thumb=await resized(im,800,.82);
     up.photos.push({full,thumb,preview:URL.createObjectURL(thumb.blob)});drawUpload()}
   catch{drawUpload('이 사진은 열 수 없어요. 다른 사진을 골라 주세요.')}
 }
@@ -911,7 +911,7 @@ document.addEventListener('submit',async e=>{
 document.addEventListener('input',e=>{if(e.target.id==='cinput'){const er=$('#cerr');er&&(er.textContent='')}});
 document.addEventListener('change',async e=>{
   if(e.target.id==='ifile'&&e.target.files[0]){itf.file=e.target.files[0];drawItemForm(itf.file.size>50*1048576?'50MB보다 작은 파일만 넣을 수 있어요.':'');return}
-  if(e.target.id==='iimg'&&e.target.files[0]){try{const im=await loadImage(e.target.files[0]);const full=await resized(im,1600,.85),thumb=await resized(im,640,.8);
+  if(e.target.id==='iimg'&&e.target.files[0]){try{const im=await loadImage(e.target.files[0]);const full=await resized(im,2400,.9),thumb=await resized(im,800,.82);
     itf.img={full,thumb,preview:URL.createObjectURL(thumb.blob)};drawItemForm()}catch{drawItemForm('이 이미지는 열 수 없어요.')}return}
   if(e.target.dataset?.slot===undefined||!e.target.files[0])return;up.board=$('#uboard')?.value||up.board;addPhoto(e.target.files[0])});
 document.addEventListener('keydown',e=>{

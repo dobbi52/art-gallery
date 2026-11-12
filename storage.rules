@@ -16,11 +16,11 @@ service firebase.storage {
            == firestore.get(/databases/(default)/documents/settings/class).data.joinKey;
     }
 
-    // 작품 사진: 우리 반만 보기, 사진 파일만, 한 장 2MB 이하, 지우기는 선생님만
+    // 작품 사진: 우리 반만 보기, 사진 파일만, 한 장 5MB 이하, 지우기는 선생님만
     match /works/{uid}/{file} {
       allow read: if isTeacher() || isMember();
       allow create: if (isTeacher() || (isMember() && request.auth.uid == uid))
-        && request.resource.size < 2 * 1024 * 1024
+        && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
       allow update, delete: if isTeacher();
     }
