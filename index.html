@@ -46,7 +46,13 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .gut{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 .inner{max-width:1180px;margin:0 auto}
 header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--panel);border-bottom:1px solid var(--line)}
-header.top .inner{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;padding-block:14px}
+header.top .inner:first-child{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;padding-block:14px 4px}
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:10px 14px 9px;color:var(--muted);font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums;transition:color .2s,border-color .2s}
+.tabs button:hover{color:var(--ink)}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink);font-weight:500}
+.tabs .gap{flex:none;width:1px;background:var(--line);margin:10px 8px}
 .brand{display:flex;flex-direction:column;cursor:pointer;background:none;border:0;padding:0;text-align:left}
 .brand small{font-size:11px;letter-spacing:.18em;color:var(--muted)}
 .brand strong{font-family:var(--serif);font-weight:600;font-size:22px;letter-spacing:-.01em;line-height:1.3}
@@ -271,12 +277,11 @@ img.fi.ok{opacity:1}
 <header class="top gut" id="hdr" hidden><div class="inner">
   <button class="brand" id="home"><small id="yearLabel"></small><strong id="clsName">우리 반 미술관</strong></button>
   <div class="hright">
-    <div class="years" id="years" role="group" aria-label="학년도"></div>
     <span class="who" id="who"></span>
     <button class="btn sm openbtn" id="openBtn" hidden></button>
     <button class="btn sm" id="adminBtn" hidden>관리</button>
   </div>
-</div></header>
+</div><div class="inner"><nav class="tabs" id="tabs" role="tablist" aria-label="미술관 구역"></nav></div></header>
 <main class="gut"><div class="inner" id="main"><div class="screen"><p>불러오는 중이에요…</p></div></div></main>
 <button class="btn primary fab" id="fab" hidden>＋ 작품 올리기</button>
 <div id="layer"></div>
@@ -421,17 +426,18 @@ function render(){
   $('#hdr').hidden=false;
   $('#clsName').textContent=S.settings.className||'우리 반 미술관';
   $('#yearLabel').textContent=`${S.year}학년도`;
-  const yrs=S.role==='teacher'?[...new Set([...(S.settings.years||[]),S.settings.year])].sort():[];
-  $('#years').innerHTML=yrs.length>1?yrs.map(y=>`<button data-y="${y}" aria-pressed="${y===S.year}">${y}</button>`).join(''):'';
+  const yrs=S.role==='teacher'?[...new Set([...(S.settings.years||[]),S.settings.year])].sort((a,b)=>b-a):[S.settings.year];
+  const fv=S.view==='featured'||S.view==='topic';
+  $('#tabs').innerHTML=yrs.map(y=>`<button role="tab" data-y="${y}" aria-selected="${!fv&&y===S.year}">${y}학년도 미술관</button>`).join('')+`<span class="gap" aria-hidden="true"></span><button role="tab" data-act="tabFeat" aria-selected="${fv}">대표 작품실</button>`;
   $('#who').textContent=S.role==='teacher'?'선생님':`${S.me.no}번 ${S.me.name}`;
   $('#adminBtn').hidden=S.role!=='teacher';
   const ob=$('#openBtn');ob.hidden=S.role!=='teacher';ob.setAttribute('aria-pressed',isOpen());
   ob.innerHTML=`<span class="dot" aria-hidden="true"></span>학생 올리기 ${isOpen()?'열림':'닫힘'}`;
   const cur=S.year===S.settings.year;
   if(S.view==='board'&&!S.boards.find(b=>b.id===S.board))S.view='home';
-  if(S.view==='topic'&&!S.featured.some(f=>f.topic===S.topic))S.view='home';
+  if(S.view==='topic'&&!S.featured.some(f=>f.topic===S.topic))S.view='featured';
   const key=`${S.view}|${S.board}|${S.student}|${S.year}|${S.topic}`;if(key!==viewKey){viewKey=key;SHOWN.clear()}
-  main.innerHTML=S.view==='board'?boardView():S.view==='student'?studentView():S.view==='topic'?topicView():homeView();
+  main.innerHTML=S.view==='board'?boardView():S.view==='student'?studentView():S.view==='topic'?topicView():S.view==='featured'?featuredView():homeView();
   $('#fab').hidden=!(S.view==='board'&&cur&&canUpload());
 }
 function homeView(){
@@ -446,7 +452,7 @@ function homeView(){
   const emptyRooms=!S.boards.length&&!add?`<div class="empty">아직 전시실이 없어요. 선생님이 전시실을 만들면 여기에 나타나요.</div>`:'';
   return `<section class="sec"><div class="sechead"${anim('head',0,'rise')}><div><p class="eyebrow">${S.year}학년도 전시실</p><h1>${cur?'우리 반 작품들':'지난 학년 작품들'}</h1></div>
     <span class="meta">${S.boards.length}개 전시실 · 작품 ${S.works.length}점</span></div>
-    ${emptyRooms}<div class="rooms">${rooms}${add}</div></section>${featSection()}
+    ${emptyRooms}<div class="rooms">${rooms}${add}</div></section>
     ${nos.length?`<section class="sec"><div class="sechead"${anim('head2',4,'rise')}><h2>학생별 모아보기</h2><span class="meta">번호를 누르면 그 학생의 작품만 모여요</span></div><div class="roster">${rosterHtml}</div></section>`:''}`;
 }
 function frame(w,showBoard,idx=0){
@@ -492,15 +498,17 @@ function itemsSection(bid){const xs=boardItems(bid);if(!xs.length)return '';
 function topics(){const m=new Map();S.featured.forEach(f=>{if(!m.has(f.topic))m.set(f.topic,[]);m.get(f.topic).push(f)});return [...m.entries()].sort((a,b)=>a[0].localeCompare(b[0],'ko'))}
 const topicList=()=>S.featured.filter(f=>f.topic===S.topic);
 const yrRange=ys=>ys.length>1?`${ys[0]}–${ys[ys.length-1]}`:`${ys[0]}`;
-function featSection(){const ts=topics();if(!ts.length)return '';
-  return `<section class="sec"><div class="sechead"${anim('head3',3,'rise')}><div><p class="eyebrow">해마다 선생님이 고른 예시 작품</p><h2>대표 작품실</h2></div><span class="meta">${ts.length}개 주제 · 작품 ${S.featured.length}점</span></div>
+function featuredView(){const ts=topics();
+  const head=`<div class="sechead"${anim('head',0,'rise')}><div><p class="eyebrow">해마다 선생님이 고른 예시 작품</p><h1>대표 작품실</h1></div>`;
+  if(!ts.length)return `<section class="sec">${head}</div><div class="empty"${anim('emp',1,'rise')}><h2>아직 대표 작품이 없어요</h2>${S.role==='teacher'?'<span>작품을 크게 보고 "대표 작품으로"를 누르면 여기에 주제별로 모여요.</span>':''}</div></section>`;
+  return `<section class="sec">${head}<span class="meta">${ts.length}개 주제 · 작품 ${S.featured.length}점</span></div>
   <div class="rooms">${ts.map(([t,fs],i)=>{const ys=[...new Set(fs.map(f=>f.year))].sort();
-    return `<button class="room" data-topic="${esc(t)}"${anim('t'+t,i+3)}><span class="cover"><span style="background-image:url('${esc(fs[0].photos[0].thumb)}')"></span></span><span><h3>${esc(t)}</h3><span class="meta">작품 ${fs.length}점 · ${yrRange(ys)}학년도</span></span></button>`}).join('')}</div></section>`}
+    return `<button class="room" data-topic="${esc(t)}"${anim('t'+t,i+1)}><span class="cover"><span style="background-image:url('${esc(fs[0].photos[0].thumb)}')"></span></span><span><h3>${esc(t)}</h3><span class="meta">작품 ${fs.length}점 · ${yrRange(ys)}학년도</span></span></button>`}).join('')}</div></section>`}
 function featFrame(f,i){const nm=S.role==='teacher'&&S.featNames[f.id];const p=f.photos[0];
   return `<button class="frame" data-work="${f.id}" aria-label="${esc(f.title||'작품')}, ${f.year}학년도"${anim(f.id,i)}><span class="mat"><img src="${esc(p.thumb)}" alt="" loading="lazy" ${imgCls(p.thumb)} ${p.w?`width="${p.w}" height="${p.h}"`:''}></span>
     <span class="cap">${f.title?`<span class="t">${esc(f.title)}</span>`:''}<span class="n"><span>${f.year}학년도${nm&&nm.no?` · ${nm.no}번 ${esc(nm.name)}`:''}</span></span></span></button>`}
 function topicView(){const fs=topicList();const ys=[...new Set(fs.map(f=>f.year))].sort((a,b)=>b-a);let k=0;
-  return `<button class="back" data-act="home">← 전시실로</button>
+  return `<button class="back" data-act="tabFeat">← 대표 작품실</button>
     <div class="boardhead"${anim('head',0,'rise')}><div><p class="eyebrow">대표 작품실 · ${yrRange([...ys].reverse())}학년도 · 작품 ${fs.length}점</p><h1>${esc(S.topic)}</h1></div>
     <div class="actions"><button class="btn" data-act="expo">▶ 전시 모드</button></div></div>
     ${ys.map(y=>{const g=fs.filter(f=>f.year===y);return `<div class="sechead"><h2>${y}학년도</h2><span class="meta">${g.length}점</span></div><div class="wall" style="margin-bottom:36px">${g.map(f=>featFrame(f,k++)).join('')}</div>`}).join('')}`}
@@ -805,7 +813,8 @@ document.addEventListener('click',async e=>{
   if(d.pick){const no=+d.pick;const key=lsGet(KEY_STORE);
     try{await setDoc(doc(db,'members',uid()),{key,no,name:S.join.roster[no-1],joinedAt:serverTimestamp()});startStudent()}catch(err){fail(err)}return}
   if(el.id==='home'||a==='home'){S.view='home';render();scrollTo(0,0);return}
-  if(d.y){S.year=+d.y;S.view='home';subscribe();return}
+  if(d.y){const y=+d.y;S.view='home';if(y!==S.year){S.year=y;subscribe()}else render();scrollTo(0,0);return}
+  if(a==='tabFeat'){S.view='featured';render();scrollTo(0,0);return}
   if(el.id==='adminBtn'){openAdmin();return}
   if(el.id==='openBtn'||a==='osw'){const on=!isOpen();await updateDoc(doc(db,'settings','class'),{uploadOpen:on});if(a==='osw')el.setAttribute('aria-checked',on);toast(on?'학생들이 작품을 올릴 수 있어요':'학생 올리기를 닫았어요. 이제 구경만 할 수 있어요');return}
   if(el.id==='fab'||a==='upload'){openUpload();return}
