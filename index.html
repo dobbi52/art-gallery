@@ -404,7 +404,8 @@ function subscribe(){
     if(S.worksLoaded)q.docChanges().forEach(c=>{if(c.type==='added')SHOWN.set(c.doc.id,{t:performance.now(),d:0,k:'drop'})});S.worksLoaded=true;
     S.works=q.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>toMs(b.createdAt)-toMs(a.createdAt));render();if($('.lb'))drawWork()},onErr));
   const soft=e=>console.error(e);
-  S.subs.push(onSnapshot(query(collection(db,'items'),where('year','==',S.year)),q=>{
+  S.items=[];
+  if(S.role==='teacher')S.subs.push(onSnapshot(query(collection(db,'items'),where('year','==',S.year)),q=>{
     S.items=q.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.order||0)-(b.order||0));render();if(ctx.mode==='ref'&&$('.lb'))drawWork()},soft));
   S.subs.push(onSnapshot(collection(db,'featured'),q=>{
     S.featured=q.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>b.year-a.year||toMs(a.createdAt)-toMs(b.createdAt));render();if($('.lb'))drawWork()},soft));
@@ -485,7 +486,7 @@ function itemCard(x,i,n){const t=S.role==='teacher'&&S.year===S.settings.year;
   const tools=t?`<div class="ic-tools"><button data-mv="${x.id}" data-d="-1" ${i===0?'disabled':''} aria-label="앞으로">←</button><button data-mv="${x.id}" data-d="1" ${i===n-1?'disabled':''} aria-label="뒤로">→</button><span class="sp"></span><button data-edit="${x.id}">고치기</button></div>`:'';
   return `<div class="ic" data-item="${x.id}"${anim('i'+x.id,i,'rise')}>${main}${tools}</div>`}
 function itemsSection(bid){const xs=boardItems(bid);if(!xs.length)return '';
-  return `<div class="sechead"${anim('ihead',1,'rise')}><h2>자료</h2><span class="meta">${xs.length}개</span></div><div class="items">${xs.map((x,i)=>itemCard(x,i,xs.length)).join('')}</div>`}
+  return `<div class="sechead"${anim('ihead',1,'rise')}><h2>자료</h2><span class="meta">선생님만 보여요 · ${xs.length}개</span></div><div class="items">${xs.map((x,i)=>itemCard(x,i,xs.length)).join('')}</div>`}
 
 /* 대표 작품실 */
 function topics(){const m=new Map();S.featured.forEach(f=>{if(!m.has(f.topic))m.set(f.topic,[]);m.get(f.topic).push(f)});return [...m.entries()].sort((a,b)=>a[0].localeCompare(b[0],'ko'))}
@@ -721,7 +722,7 @@ function drawItemForm(err=''){
     body=`<div class="field"><label for="iimg">${x?'이미지':'이미지 고르기'}</label>${pv?`<img src="${esc(pv)}" alt="" style="max-height:160px;width:auto;align-self:flex-start;border:1px solid var(--line)">`:''}${x?'':`<input type="file" id="iimg" accept="image/*">`}</div>`}
   if(T==='memo')body=`<div class="field"><label for="imemo">내용</label><textarea id="imemo" rows="5" maxlength="600" placeholder="오늘의 활동 순서, 준비물 같은 안내">${esc(memo)}</textarea></div>`;
   const del=x?(itf.confirm?`<div class="confirm">이 자료를 지울까요? <button class="btn sm danger" data-act="itemDelYes">지우기</button><button class="btn sm" data-act="itemDelNo">취소</button></div>`:'<button class="btn danger" data-act="itemDel">지우기</button>'):'<span></span>';
-  openLayer(`<button class="x" data-act="close" aria-label="닫기">×</button><h2>${x?'자료 고치기':'자료 넣기'}</h2><p class="sub">학생은 보기만 할 수 있어요.</p>${seg}${body}
+  openLayer(`<button class="x" data-act="close" aria-label="닫기">×</button><h2>${x?'자료 고치기':'자료 넣기'}</h2><p class="sub">자료는 선생님만 볼 수 있어요.</p>${seg}${body}
     <div class="field"><label for="ititle">제목 ${T==='memo'?'(선택)':'(비워 두면 자동으로)'}</label><input type="text" id="ititle" maxlength="40" value="${esc(title)}"></div>
     ${T==='memo'?'':`<div class="field"><label for="inote">한 줄 설명 (선택)</label><input type="text" id="inote" maxlength="60" value="${esc(note)}"></div>`}
     <span class="err" id="ierr">${esc(err)}</span>

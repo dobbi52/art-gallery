@@ -81,10 +81,9 @@ service cloud.firestore {
       }
     }
 
-    // 전시실 자료 (링크, 영상, 파일, 참고 이미지, 메모) - 넣기와 고치기는 선생님만
+    // 전시실 자료 (링크, 영상, 파일, 참고 이미지, 메모) - 선생님만 보기
     match /items/{id} {
-      allow read: if isTeacher() || (isMember() && resource.data.year == settings().year);
-      allow write: if isTeacher();
+      allow read, write: if isTeacher();
     }
 
     // 대표 작품실 - 학생은 보기만, 이름은 들어 있지 않음

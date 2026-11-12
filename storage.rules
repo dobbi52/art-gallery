@@ -25,9 +25,9 @@ service firebase.storage {
       allow update, delete: if isTeacher();
     }
 
-    // 전시실 자료 파일과 참고 이미지: 선생님만 올리기, 한 개 50MB 이하
+    // 전시실 자료 파일과 참고 이미지: 선생님만 보기와 올리기, 한 개 50MB 이하
     match /items/{file} {
-      allow read: if isTeacher() || isMember();
+      allow read: if isTeacher();
       allow create, update: if isTeacher() && request.resource.size < 50 * 1024 * 1024;
       allow delete: if isTeacher();
     }
