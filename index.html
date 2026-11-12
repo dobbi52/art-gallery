@@ -534,7 +534,7 @@ function homeView(){
   const nos=cur?roster().map((_,i)=>i+1):[...new Set(S.works.map(w=>w.no))].filter(n=>n>0).sort((a,b)=>a-b);
   const rosterHtml=nos.map((no,i)=>`<button data-stu="${no}"${anim('s'+no,i+4)}><b>${no}</b><span>${esc(names[i])}</span><span class="c">${S.works.filter(w=>w.no===no).length}점</span></button>`).join('');
   const emptyRooms=!S.boards.length&&!add?`<div class="empty">아직 전시실이 없어요. 선생님이 전시실을 만들면 여기에 나타나요.</div>`:'';
-  return `<section class="sec"><div class="sechead"${anim('head',0,'rise')}><div><p class="eyebrow">${S.year}학년도 전시실</p><h1>${cur?'우리 반 작품들':'지난 학년 작품들'}</h1></div>
+  return `<section class="sec"><div class="sechead"${anim('head',0,'rise')}><div><h1>전시실</h1></div>
     <span class="meta">${S.boards.length}개 전시실 · 작품 ${S.works.length}점</span></div>
     ${emptyRooms}<div class="rooms">${rooms}${add}</div></section>
     ${nos.length?`<section class="sec"><div class="sechead"${anim('head2',4,'rise')}><h2>학생별 모아보기</h2><span class="meta">번호를 누르면 그 학생의 작품만 모여요</span></div><div class="roster">${rosterHtml}</div></section>`:''}`;
@@ -589,7 +589,7 @@ function topics(){const m=new Map();S.featured.forEach(f=>{if(!m.has(f.topic))m.
 const topicList=()=>S.featured.filter(f=>f.topic===S.topic);
 const yrRange=ys=>ys.length>1?`${ys[0]}–${ys[ys.length-1]}`:`${ys[0]}`;
 function featuredView(){const ts=topics();
-  const head=`<div class="sechead"${anim('head',0,'rise')}><div><p class="eyebrow">해마다 선생님이 고른 예시 작품</p><h1>대표 작품실</h1></div>`;
+  const head=`<div class="sechead"${anim('head',0,'rise')}><div><h1>주제별 대표 작품</h1></div>`;
   if(!ts.length)return `<section class="sec">${head}</div><div class="empty"${anim('emp',1,'rise')}><h2>아직 대표 작품이 없어요</h2>${S.role==='teacher'?'<span>작품을 크게 보고 "대표 작품으로"를 누르면 여기에 주제별로 모여요.</span>':''}</div></section>`;
   return `<section class="sec">${head}<span class="meta">${ts.length}개 주제 · 작품 ${S.featured.length}점</span></div>
   <div class="rooms">${ts.map(([t,fs],i)=>{const ys=[...new Set(fs.map(f=>f.year))].sort();
