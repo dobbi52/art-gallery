@@ -208,6 +208,11 @@ textarea{resize:vertical;min-height:72px}
 .trow>div{flex:1 1 180px;min-width:0}
 .trow strong{font-weight:500;overflow-wrap:anywhere}
 .trow p{margin:0;font-size:12.5px;color:var(--muted)}
+.drow{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.drow:first-child{border-top:0}
+.drow strong{font-weight:500;min-width:96px}
+.drow.dup strong{color:var(--danger)}
+.drow .mlist{margin:0}
 #printArea{display:none}
 .status{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px;margin-bottom:32px;display:flex;flex-direction:column;gap:10px}
 .st-head{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;justify-content:space-between}
@@ -926,8 +931,19 @@ const joinUrl=()=>`${location.origin}${location.pathname}?k=${S.settings.joinKey
 const teacherUrl=()=>`${location.origin}${location.pathname}?t=1`;
 function qrData(text,cell){const q=qrcode(0,'M');q.addData(text);q.make();return q.createDataURL(cell,2)}
 let adm={confirm:null,members:[]};
+async function loadMembers(){const q=await getDocs(collection(db,'members'));adm.members=q.docs.map(d=>({id:d.id,...d.data()})).filter(m=>m.key===S.settings.joinKey).sort((a,b)=>a.no-b.no||toMs(a.joinedAt)-toMs(b.joinedAt))}
 async function openAdmin(){adm.confirm=null;drawAdmin();
-  try{const q=await getDocs(collection(db,'members'));adm.members=q.docs.map(d=>({id:d.id,...d.data()})).filter(m=>m.key===S.settings.joinKey).sort((a,b)=>a.no-b.no||toMs(a.joinedAt)-toMs(b.joinedAt));if($('#admRoot'))drawAdmin()}catch(e){console.error(e)}}
+  try{await loadMembers();if($('#admRoot'))drawAdmin()}catch(e){console.error(e)}}
+const dupNos=()=>[...new Set(adm.members.map(m=>m.no))].filter(no=>dup(no));
+function drawDevices(){const ms=adm.members;const ro=roster();const by=new Map();ms.forEach(m=>{if(!by.has(m.no))by.set(m.no,[]);by.get(m.no).push(m)});
+  const notIn=ro.map((_,i)=>i+1).filter(no=>!by.has(no));const dn=dupNos();
+  openLayer(`<button class="x" data-act="close" aria-label="닫기">×</button><h2>들어온 기기 ${ms.length}대</h2>
+    <p class="sub">학생 QR로 들어와 번호를 고른 휴대폰·태블릿·컴퓨터예요. ×를 누르면 그 기기는 다음에 들어올 때 번호를 다시 골라요. 이미 올린 작품은 그대로예요.</p>
+    ${dn.length?`<p class="note" style="color:var(--danger);margin:0 0 12px">같은 번호로 들어온 기기가 있어요: ${dn.map(n=>n+'번').join(', ')}</p>`:''}
+    <div class="dlist">${[...by.entries()].sort((a,b)=>a[0]-b[0]).map(([no,arr])=>`<div class="drow${arr.length>1?' dup':''}"><strong>${no}번 ${esc(arr[0].name)}${arr.length>1?` · ${arr.length}대`:''}</strong>
+      <div class="mlist">${arr.map(m=>`<span>${when(m.joinedAt)||'시간 모름'}<button data-delm="${m.id}" aria-label="${no}번 기기 지우기">×</button></span>`).join('')}</div></div>`).join('')||'<div class="empty">아직 들어온 기기가 없어요.</div>'}</div>
+    ${notIn.length&&ms.length?`<p class="meta" style="margin:14px 0 0">아직 안 들어온 번호: ${notIn.join(', ')}</p>`:''}
+    <div class="actions" style="justify-content:space-between;margin-top:16px"><button class="btn" data-act="backAdmin">← 관리로</button><button class="btn" data-act="close">닫기</button></div>`,'sheet','devices')}
 const when=t=>{if(!t?.toDate)return '';const d=t.toDate();return `${d.getMonth()+1}월 ${d.getDate()}일 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`};
 const dup=no=>adm.members.filter(m=>m.no===no).length>1;
 function drawAdmin(){
@@ -941,8 +957,7 @@ function drawAdmin(){
         ${conf('qrnew','새 QR을 만들면 지금 들어와 있는 학생들도 새 QR을 다시 찍어야 해요.','새로 만들기')}</div>
       <div class="row"><div><strong>선생님용 접속 QR</strong><p>선생님 휴대폰으로 찍으면 선생님 로그인 화면이 열려요. 학생이 찍어도 선생님 구글 계정이 없으면 들어올 수 없어요.</p></div>
         <button class="btn sm" data-act="tqrbig">QR 보기</button></div>
-      <div class="row"><div><strong>들어온 기기 ${adm.members.length}대</strong><p>학생 QR로 들어와 번호를 고른 휴대폰·태블릿·컴퓨터예요. 같은 번호가 여러 대면 확인해 보세요. ×를 누르면 그 기기는 번호를 다시 골라요.</p>
-        <div class="mlist">${adm.members.map(m=>`<span${dup(m.no)?' class="dup"':''}>${m.no}번 ${esc(m.name)}<i>${when(m.joinedAt)}</i><button data-delm="${m.id}" aria-label="${m.no}번 다시 고르게 하기">×</button></span>`).join('')||'<span style="padding-right:10px">아직 들어온 기기가 없어요</span>'}</div></div></div>
+      <div class="row"><div><strong>들어온 기기 ${adm.members.length}대</strong><p>${dupNos().length?`<span style="color:var(--danger)">같은 번호로 들어온 기기가 있어요: ${dupNos().map(n=>n+'번').join(', ')}</span>`:'학생 QR로 들어와 번호를 고른 기기 목록이에요.'}</p></div><button class="btn sm" data-act="devices">목록 보기</button></div>
       <div class="row"><div><strong>학생 작품 올리기</strong><p>닫으면 학생은 구경만 할 수 있어요. 위쪽 버튼으로도 바로 열고 닫을 수 있어요.</p></div><button class="switch" role="switch" data-act="osw" aria-checked="${isOpen()}" aria-label="학생 작품 올리기 열기"></button></div>
       <div class="row"><div><strong>한 줄 감상</strong><p>끄면 학생들이 새 감상을 남길 수 없어요.</p></div><button class="switch" role="switch" data-act="csw" aria-checked="${s.commentsOn!==false}" aria-label="한 줄 감상 켜기"></button></div>
       <div class="row"><div><strong>휴지통</strong><p>지운 전시실, 작품, 자료를 30일 동안 보관해요. 그 안에는 되살릴 수 있어요.</p></div><button class="btn sm" data-act="trash">휴지통 열기</button></div>
@@ -1207,7 +1222,9 @@ document.addEventListener('click',async e=>{
   if(a==='qrnew'){adm.confirm='qrnew';drawAdmin();return}
   if(a==='admNo'){adm.confirm=null;drawAdmin();return}
   if(a==='qrnewYes'){await rotateKey({});adm.confirm=null;adm.members=[];drawAdmin();toast('새 QR을 만들었어요. 예전 QR로는 더 이상 들어올 수 없어요');return}
-  if(d.delm){await deleteDoc(doc(db,'members',d.delm));adm.members=adm.members.filter(m=>m.id!==d.delm);drawAdmin();toast('그 학생은 다음에 들어올 때 번호를 다시 골라요');return}
+  if(d.delm){await deleteDoc(doc(db,'members',d.delm));adm.members=adm.members.filter(m=>m.id!==d.delm);if($('.dlist')||$('.sheet[data-kind="devices"]'))drawDevices();else drawAdmin();toast('그 기기는 다음에 들어올 때 번호를 다시 골라요');return}
+  if(a==='devices'){drawDevices();try{await loadMembers();if($('.sheet[data-kind="devices"]'))drawDevices()}catch(e){console.error(e)}return}
+  if(a==='backAdmin'){adm.confirm=null;drawAdmin();return}
   if(a==='editRoster'){openRoster(false);return}
   if(a==='newYear'){openRoster(true);return}
   if(a==='rosterSave'||a==='newYearYes'){
