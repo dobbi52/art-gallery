@@ -679,14 +679,26 @@ async function rotateKey(patch){
   b.update(doc(db,'settings','class'),{...patch,joinKey:key});
   await b.commit();S.settings=next;
 }
-function openBoardForm(edit){
-  const b=edit?S.boards.find(x=>x.id===S.board):null;const empty=b&&!boardWorks(b.id).length;
+let bf={confirm:false,busy:false};
+function openBoardForm(edit,keep){
+  if(!keep)bf={confirm:false,busy:false};
+  const b=edit?S.boards.find(x=>x.id===S.board):null;
+  const t=(keep?$('#nbt')?.value:null)??b?.title??'',wn=(keep?$('#nbw')?.value:null)??b?.when??'';
+  const ws=b?boardWorks(b.id):[];const nf=ws.filter(w=>w.featured).length;
+  const del=b&&!bf.confirm?'<button class="btn danger" data-act="delBoard">전시실 지우기</button>':'<span></span>';
+  const conf=b&&bf.confirm?`<div class="note" style="margin:0 0 16px;display:flex;flex-direction:column;gap:10px">
+    <strong style="font-weight:500;color:var(--danger)">${ws.length?`작품 ${ws.length}점과 감상, 자료가 모두 지워지고 되돌릴 수 없어요.`:'이 전시실을 지울까요? 되돌릴 수 없어요.'}</strong>
+    ${nf?`<span>대표 작품실에 걸린 ${nf}점은 그대로 남아요.</span>`:''}
+    ${ws.length?`<label for="bdel">지우려면 전시실 이름 「${esc(b.title)}」을 그대로 적어 주세요.</label><input type="text" id="bdel" autocomplete="off">`:''}
+    <span class="err" id="bderr"></span>
+    <span class="actions"><button class="btn sm danger" data-act="delBoardYes" id="bdelbtn">전시실 지우기</button><button class="btn sm" data-act="delBoardNo">취소</button></span></div>`:'';
   openLayer(`<button class="x" data-act="close" aria-label="닫기">×</button><h2>${b?'전시실 고치기':'새 전시실'}</h2><p class="sub">단원이나 주제 이름으로 만들어요.</p>
-    <div class="field"><label for="nbt">전시실 이름</label><input type="text" id="nbt" maxlength="24" value="${esc(b?.title||'')}" placeholder="12월 점묘화"></div>
-    <div class="field"><label for="nbw">시기 (선택)</label><input type="text" id="nbw" maxlength="12" value="${esc(b?.when||'')}" placeholder="12월"></div><span class="err" id="nberr"></span>
-    <div class="actions" style="justify-content:space-between">${empty?'<button class="btn danger" data-act="delBoard">전시실 지우기</button>':'<span></span>'}
+    <div class="field"><label for="nbt">전시실 이름</label><input type="text" id="nbt" maxlength="24" value="${esc(t)}" placeholder="12월 점묘화"></div>
+    <div class="field"><label for="nbw">시기 (선택)</label><input type="text" id="nbw" maxlength="12" value="${esc(wn)}" placeholder="12월"></div><span class="err" id="nberr"></span>
+    ${conf}
+    <div class="actions" style="justify-content:space-between">${del}
     <span class="actions"><button class="btn" data-act="close">취소</button><button class="btn primary" data-act="${b?'saveBoard':'mkBoard'}">${b?'저장':'만들기'}</button></span></div>`,'sheet','board');
-  setTimeout(()=>$('#nbt')?.focus(),0);
+  setTimeout(()=>{(bf.confirm?$('#bdel'):keep?null:$('#nbt'))?.focus()},0);
 }
 
 /* ---------- 자료 넣기 ---------- */
@@ -841,7 +853,17 @@ document.addEventListener('click',async e=>{
     if(a==='mkBoard'){const r=doc(collection(db,'boards'));await setDoc(r,{year:S.settings.year,title:t,when,createdAt:serverTimestamp()});closeLayer();S.view='board';S.board=r.id;toast('새 전시실을 만들었어요')}
     else{await updateDoc(doc(db,'boards',S.board),{title:t,when});closeLayer();toast('저장했어요')}
     return}
-  if(a==='delBoard'){for(const x of boardItems(S.board))await deleteItem(x);await deleteDoc(doc(db,'boards',S.board));closeLayer();S.view='home';render();toast('전시실을 지웠어요');return}
+  if(a==='delBoard'){bf.confirm=true;openBoardForm(true,true);return}
+  if(a==='delBoardNo'){bf.confirm=false;openBoardForm(true,true);return}
+  if(a==='delBoardYes'){if(bf.busy)return;const b=S.boards.find(x=>x.id===S.board);if(!b)return;const ws=boardWorks(b.id);
+    if(ws.length&&$('#bdel').value.trim()!==b.title){$('#bderr').textContent='전시실 이름이 맞지 않아요.';return}
+    bf.busy=true;const btn=$('#bdelbtn');btn.disabled=true;btn.textContent='지우는 중…';
+    try{for(const w of ws){const cs=await getDocs(collection(db,'works',w.id,'comments'));const bt=writeBatch(db);cs.docs.forEach(c=>bt.delete(c.ref));bt.delete(doc(db,'works',w.id));await bt.commit();
+        if(!w.featured)for(const p of w.photos)for(const path of [p.path,p.thumbPath]){try{await deleteObject(ref(st,path))}catch{}}}
+      for(const x of boardItems(b.id))await deleteItem(x);
+      await deleteDoc(doc(db,'boards',b.id));
+    }catch(err){bf.busy=false;btn.disabled=false;btn.textContent='전시실 지우기';throw err}
+    bf.busy=false;closeLayer();S.view='home';render();toast('전시실을 지웠어요');return}
   if(a==='csw'){const on=S.settings.commentsOn===false;await updateDoc(doc(db,'settings','class'),{commentsOn:on});el.setAttribute('aria-checked',on);toast(on?'한 줄 감상을 켰어요':'한 줄 감상을 껐어요');return}
   if(a==='qrbig'||a==='tqrbig'){const t=a==='tqrbig';const ov=document.createElement('div');ov.className='bigqr';
     ov.innerHTML=`<h2>${t?'선생님용 접속':esc(S.settings.className)}</h2><img src="${qrData(t?teacherUrl():joinUrl(),10)}" alt="${t?'선생님용 접속 QR':'학생 입장 QR'}"><p style="margin:0;color:#444">${t?'선생님 휴대폰으로 찍고 구글 계정으로 로그인하세요':'휴대폰 카메라로 찍어서 들어오세요'}</p><button data-act="bigclose">닫기</button>`;document.body.appendChild(ov);return}
@@ -885,9 +907,9 @@ document.addEventListener('change',async e=>{
 document.addEventListener('keydown',e=>{
   if($('.bigqr')&&e.key==='Escape'){$('.bigqr').remove();return}
   if($('#expo')){if(e.key==='Escape')closeExpo();if(e.key==='ArrowRight'||e.key==='ArrowLeft'){ex.i=(ex.i+(e.key==='ArrowRight'?1:-1)+ex.list.length)%ex.list.length;showExpo();tick()}return}
-  if(!$('#ov'))return;if(e.key==='Escape'&&!up.busy&&!itf.busy)closeLayer();
+  if(!$('#ov'))return;if(e.key==='Escape'&&!up.busy&&!itf.busy&&!bf.busy)closeLayer();
   if($('.lb')&&document.activeElement?.tagName!=='INPUT'){if(e.key==='ArrowRight')step(1);if(e.key==='ArrowLeft')step(-1)}});
-document.addEventListener('mousedown',e=>{if(e.target.id==='ov'&&!up.busy&&!itf.busy)closeLayer()});
+document.addEventListener('mousedown',e=>{if(e.target.id==='ov'&&!up.busy&&!itf.busy&&!bf.busy)closeLayer()});
 </script>
 </body>
 </html>
