@@ -201,6 +201,13 @@ textarea{resize:vertical;min-height:72px}
 .expo .count{position:absolute;top:calc(env(safe-area-inset-top,0px) + 18px);right:max(24px,calc(env(safe-area-inset-right,0px) + 24px));font-size:12.5px;color:#7F7D76;letter-spacing:.1em;font-variant-numeric:tabular-nums}
 .expo .room-t{position:absolute;top:calc(env(safe-area-inset-top,0px) + 18px);left:max(24px,calc(env(safe-area-inset-left,0px) + 24px));font-family:var(--serif);font-size:14px;color:#9C9990}
 .fade{opacity:0}
+.tlist{display:flex;flex-direction:column}
+.trow{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.trow:first-child{border-top:0}
+.trow img,.trow .tic{width:52px;height:52px;object-fit:cover;border:1px solid var(--line);flex:none;display:flex;align-items:center;justify-content:center;color:var(--faint);background:var(--wall)}
+.trow>div{flex:1 1 180px;min-width:0}
+.trow strong{font-weight:500;overflow-wrap:anywhere}
+.trow p{margin:0;font-size:12.5px;color:var(--muted)}
 #printArea{display:none}
 .status{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px;margin-bottom:32px;display:flex;flex-direction:column;gap:10px}
 .st-head{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;justify-content:space-between}
@@ -418,7 +425,8 @@ async function startTeacher(){
     const s=await getDoc(doc(db,'settings','class'));
     if(!s.exists())return showScreen('setup');
     S.settings=s.data();S.year=S.settings.year;watchSettings();subscribe();
-  }catch(e){showScreen('notTeacher')}
+  }catch(e){return showScreen('notTeacher')}
+  purgeTrash().catch(e=>console.error(e));
 }
 async function startStudent(){
   const key=lsGet(KEY_STORE);
@@ -454,16 +462,16 @@ function subscribe(){
   S.subs.forEach(u=>u());S.subs=[];S.boards=[];S.works=[];
   const onErr=e=>{console.error(e);if(S.role==='student'){stopSubs();showScreen('badKey')}else toast('불러오지 못했어요. 새로고침해 주세요.')};
   S.subs.push(onSnapshot(query(collection(db,'boards'),where('year','==',S.year)),q=>{
-    S.boards=q.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>toMs(b.createdAt)-toMs(a.createdAt));render()},onErr));
+    S.boards=q.docs.map(d=>({id:d.id,...d.data()})).filter(b=>!b.trashed).sort((a,b)=>toMs(b.createdAt)-toMs(a.createdAt));render()},onErr));
   const wq=S.role==='teacher'?query(collection(db,'works'),where('year','==',S.year)):query(collection(db,'works'),where('year','==',S.year),where('hidden','==',false));
   S.worksLoaded=false;
   S.subs.push(onSnapshot(wq,q=>{
     if(S.worksLoaded)q.docChanges().forEach(c=>{if(c.type==='added')SHOWN.set(c.doc.id,{t:performance.now(),d:0,k:'drop'})});S.worksLoaded=true;
-    S.works=q.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>toMs(b.createdAt)-toMs(a.createdAt));render();if($('.lb'))drawWork()},onErr));
+    S.works=q.docs.map(d=>({id:d.id,...d.data()})).filter(w=>!w.trashed).sort((a,b)=>toMs(b.createdAt)-toMs(a.createdAt));render();if($('.lb'))drawWork()},onErr));
   const soft=e=>console.error(e);
   S.items=[];
   if(S.role==='teacher')S.subs.push(onSnapshot(query(collection(db,'items'),where('year','==',S.year)),q=>{
-    S.items=q.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.order||0)-(b.order||0));render();if(ctx.mode==='ref'&&$('.lb'))drawWork()},soft));
+    S.items=q.docs.map(d=>({id:d.id,...d.data()})).filter(x=>!x.trashed).sort((a,b)=>(a.order||0)-(b.order||0));render();if(ctx.mode==='ref'&&$('.lb'))drawWork()},soft));
   S.subs.push(onSnapshot(collection(db,'featured'),q=>{
     S.featured=q.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>b.year-a.year||toMs(a.createdAt)-toMs(b.createdAt));render();if($('.lb'))drawWork()},soft));
   if(S.role==='teacher')S.subs.push(onSnapshot(query(collection(db,'works'),where('featured','==',true)),q=>{
@@ -662,7 +670,7 @@ function drawWork(){
       <div class="cmts"><strong style="font-weight:500;font-size:14px">한 줄 감상 ${ctx.comments.length}</strong>${cm||'<span class="meta">첫 감상을 남겨 보세요.</span>'}
         ${canC?`<form class="addc" id="cform"><input type="text" id="cinput" maxlength="40" placeholder="${t?'선생님 한마디':'좋았던 점을 한 줄로'}" aria-label="한 줄 감상"><button class="btn sm primary">남기기</button></form><span class="err" id="cerr"></span>`:
         `<p class="note">${cur?'선생님이 감상 남기기를 잠시 꺼두었어요.':'지난 학년 작품에는 감상을 남길 수 없어요.'}</p>`}</div>
-      ${t?`<div class="tadmin">${ctx.confirm?`<div class="confirm">이 작품을 삭제할까요? 사진과 감상이 모두 지워지고 되돌릴 수 없어요. <button class="btn sm danger" data-act="delyes">삭제</button><button class="btn sm" data-act="delno">취소</button></div>`:
+      ${t?`<div class="tadmin">${ctx.confirm?`<div class="confirm">이 작품을 휴지통으로 옮길까요? 30일 안에는 관리 창의 휴지통에서 되살릴 수 있어요. <button class="btn sm danger" data-act="delyes">휴지통으로</button><button class="btn sm" data-act="delno">취소</button></div>`:
         ctx.feat?featForm(b?.title||''):`${w.featured?`<p class="meta" style="flex-basis:100%;margin:0">대표 작품실 · ${esc(w.topic||'')}</p><button class="btn sm" data-act="unfeat">대표 작품에서 빼기</button>`:'<button class="btn sm" data-act="feat">대표 작품으로</button>'}<button class="btn sm" data-act="editWork">고치기</button>${b&&b.cover===w.id?'<button class="btn sm" data-act="uncover" aria-pressed="true">✓ 전시실 표지</button>':'<button class="btn sm" data-act="cover">전시실 표지로</button>'}<button class="btn sm" data-act="hide">${w.hidden?'다시 보이기':'숨기기'}</button><button class="btn sm danger" data-act="del">삭제</button>`}</div>`:''}
       <div class="nav"><button class="btn sm" data-act="prev" ${i===0?'disabled':''}>← 이전</button><span class="meta">${i+1} / ${list.length}</span><button class="btn sm" data-act="next" ${i===list.length-1?'disabled':''}>다음 →</button></div>
     </div>`,'lb');
@@ -872,6 +880,46 @@ async function downloadZip(works,zipName,btn){
   catch(e){console.error(e);toast('내려받지 못했어요. 인터넷 연결을 확인하고 다시 해 주세요.')}
   finally{if(btn){btn.disabled=false;btn.textContent=label}}}
 
+/* ---------- 휴지통 (30일 보관) ---------- */
+const KEEP=30*86400000;
+const trashPatch=w=>({trashed:true,trashedAt:serverTimestamp(),wasHidden:!!w.hidden,hidden:true});
+const daysLeft=t=>Math.max(0,Math.ceil((toMs(t)+KEEP-Date.now())/86400000));
+async function hardDeleteWork(w,keepPhotos){const cs=await getDocs(collection(db,'works',w.id,'comments'));const b=writeBatch(db);cs.docs.forEach(c=>b.delete(c.ref));b.delete(doc(db,'works',w.id));
+  if(!keepPhotos)b.delete(doc(db,'featured',w.id));await b.commit();
+  if(!keepPhotos)for(const p of w.photos||[])for(const path of [p.path,p.thumbPath]){try{await deleteObject(ref(st,path))}catch{}}}
+async function featuredExists(id){try{return (await getDoc(doc(db,'featured',id))).exists()}catch{return false}}
+async function purgeTrash(){const cut=new Date(Date.now()-KEEP);
+  const ws=await getDocs(query(collection(db,'works'),where('trashedAt','<',cut)));
+  for(const d of ws.docs){const w={id:d.id,...d.data()};await hardDeleteWork(w,w.trashBoard&&w.featured&&await featuredExists(w.id))}
+  const xs=await getDocs(query(collection(db,'items'),where('trashedAt','<',cut)));for(const d of xs.docs)await deleteItem({id:d.id,...d.data()});
+  const bs=await getDocs(query(collection(db,'boards'),where('trashedAt','<',cut)));for(const d of bs.docs)await deleteDoc(d.ref)}
+const untrash={trashed:deleteField(),trashedAt:deleteField(),trashBoard:deleteField()};
+async function restoreWork(w){const b=writeBatch(db);b.update(doc(db,'works',w.id),{...untrash,hidden:!!w.wasHidden,wasHidden:deleteField()});
+  if(w.featured&&w.topic){const bd=(await getDoc(doc(db,'boards',w.boardId))).data();
+    b.set(doc(db,'featured',w.id),{topic:w.topic,year:w.year,title:w.title||'',desc:w.desc||'',boardTitle:bd?.title||'',photos:w.photos.map(p=>({url:p.url,thumb:p.thumb,w:p.w||null,h:p.h||null})),createdAt:serverTimestamp()},{merge:true})}
+  await b.commit()}
+async function restoreBoard(bd){const b=writeBatch(db);b.update(doc(db,'boards',bd.id),{trashed:deleteField(),trashedAt:deleteField()});
+  for(const w of tr.works.filter(w=>w.trashBoard===bd.id))b.update(doc(db,'works',w.id),{...untrash,hidden:!!w.wasHidden,wasHidden:deleteField()});
+  for(const x of tr.items.filter(x=>x.trashBoard===bd.id))b.update(doc(db,'items',x.id),untrash);await b.commit()}
+let tr={works:[],boards:[],items:[],sure:null,busy:false};
+async function openTrash(){tr.sure=null;
+  openLayer(`<button class="x" data-act="close" aria-label="닫기">×</button><h2>휴지통</h2><p class="sub">불러오는 중…</p>`,'sheet','trash');
+  try{const get=async c=>(await getDocs(query(collection(db,c),where('trashed','==',true)))).docs.map(d=>({id:d.id,...d.data()}));
+    [tr.works,tr.boards,tr.items]=await Promise.all([get('works'),get('boards'),get('items')]);drawTrash()}
+  catch(e){fail(e)}}
+function drawTrash(){
+  const ord=(a,b)=>toMs(b.trashedAt)-toMs(a.trashedAt);
+  const row=(key,thumb,title,meta,t)=>`<div class="trow">${thumb?`<img src="${esc(thumb)}" alt="">`:'<span class="tic" aria-hidden="true">▢</span>'}
+    <div><strong>${esc(title)}</strong><p>${esc(meta)} · ${daysLeft(t)}일 뒤 완전히 지워져요</p></div>
+    <span class="actions"><button class="btn sm" data-restore="${key}">되살리기</button>${tr.sure===key?`<button class="btn sm danger" data-purge="${key}">정말 지우기</button>`:`<button class="btn sm" data-purgeask="${key}">지금 지우기</button>`}</span></div>`;
+  const bRows=[...tr.boards].sort(ord).map(b=>{const n=tr.works.filter(w=>w.trashBoard===b.id).length;const cov=tr.works.find(w=>w.trashBoard===b.id)?.photos?.[0]?.thumb;
+    return row('b:'+b.id,cov,`전시실 · ${b.title}`,`${b.year}학년도 · 작품 ${n}점`,b.trashedAt)}).join('');
+  const wRows=tr.works.filter(w=>!w.trashBoard).sort(ord).map(w=>row('w:'+w.id,w.photos?.[0]?.thumb,w.title||(w.no?`${w.no}번 ${w.name}`:'작품'),`${w.year}학년도${w.no?` · ${w.no}번 ${w.name}`:''}`,w.trashedAt)).join('');
+  const iRows=tr.items.filter(x=>!x.trashBoard).sort(ord).map(x=>row('i:'+x.id,x.type==='image'?x.photos?.[0]?.thumb:'',`자료 · ${x.title||KIND[x.type]}`,`${x.year}학년도 · ${KIND[x.type]}`,x.trashedAt)).join('');
+  const any=bRows||wRows||iRows;
+  openLayer(`<button class="x" data-act="close" aria-label="닫기">×</button><h2>휴지통</h2><p class="sub">지운 전시실과 작품은 30일 동안 여기 보관돼요. 되살리면 사진, 하트, 감상까지 그대로 돌아와요.</p>
+    ${any?`<div class="tlist">${bRows}${wRows}${iRows}</div>`:'<div class="empty">휴지통이 비어 있어요.</div>'}`,'sheet','trash')}
+
 /* ---------- 관리 ---------- */
 const newKey=()=>{const a=new Uint8Array(12);crypto.getRandomValues(a);return Array.from(a,x=>'abcdefghjkmnpqrstuvwxyz23456789'[x%31]).join('')};
 const joinUrl=()=>`${location.origin}${location.pathname}?k=${S.settings.joinKey}`;
@@ -897,6 +945,7 @@ function drawAdmin(){
         <div class="mlist">${adm.members.map(m=>`<span${dup(m.no)?' class="dup"':''}>${m.no}번 ${esc(m.name)}<i>${when(m.joinedAt)}</i><button data-delm="${m.id}" aria-label="${m.no}번 다시 고르게 하기">×</button></span>`).join('')||'<span style="padding-right:10px">아직 들어온 기기가 없어요</span>'}</div></div></div>
       <div class="row"><div><strong>학생 작품 올리기</strong><p>닫으면 학생은 구경만 할 수 있어요. 위쪽 버튼으로도 바로 열고 닫을 수 있어요.</p></div><button class="switch" role="switch" data-act="osw" aria-checked="${isOpen()}" aria-label="학생 작품 올리기 열기"></button></div>
       <div class="row"><div><strong>한 줄 감상</strong><p>끄면 학생들이 새 감상을 남길 수 없어요.</p></div><button class="switch" role="switch" data-act="csw" aria-checked="${s.commentsOn!==false}" aria-label="한 줄 감상 켜기"></button></div>
+      <div class="row"><div><strong>휴지통</strong><p>지운 전시실, 작품, 자료를 30일 동안 보관해요. 그 안에는 되살릴 수 있어요.</p></div><button class="btn sm" data-act="trash">휴지통 열기</button></div>
       <div class="row"><div><strong>숨긴 작품 ${hid}점</strong><p>작품 창에서 다시 보이게 할 수 있어요.</p></div></div>
       <div class="row"><div><strong>미술관 이름과 반 명단</strong><p>${esc(s.className)} · ${s.year}학년도 · ${roster().length}명</p></div><button class="btn sm" data-act="editRoster">고치기</button></div>
       <div class="row"><div><strong>새 학년도 시작</strong><p>새 명단과 새 QR이 만들어지고, 지난 작품은 그대로 남아 선생님만 볼 수 있어요.</p></div><button class="btn sm" data-act="newYear">${s.year+1}학년도 시작</button></div>
@@ -930,11 +979,10 @@ function openBoardForm(edit,keep){
   const ws=b?boardWorks(b.id):[];const nf=ws.filter(w=>w.featured).length;
   const del=b&&!bf.confirm?'<button class="btn danger" data-act="delBoard">전시실 지우기</button>':'<span></span>';
   const conf=b&&bf.confirm?`<div class="note" style="margin:0 0 16px;display:flex;flex-direction:column;gap:10px">
-    <strong style="font-weight:500;color:var(--danger)">${ws.length?`작품 ${ws.length}점과 감상, 자료가 모두 지워지고 되돌릴 수 없어요.`:'이 전시실을 지울까요? 되돌릴 수 없어요.'}</strong>
-    ${nf?`<span>대표 작품실에 걸린 ${nf}점은 그대로 남아요.</span>`:''}
-    ${ws.length?`<label for="bdel">지우려면 전시실 이름 「${esc(b.title)}」을 그대로 적어 주세요.</label><input type="text" id="bdel" autocomplete="off">`:''}
+    <strong style="font-weight:500;color:var(--danger)">이 전시실을 휴지통으로 옮길까요?${ws.length?` 작품 ${ws.length}점과 자료도 함께 옮겨져요.`:''}</strong>
+    <span>30일 안에는 관리 창의 휴지통에서 그대로 되살릴 수 있어요.${nf?` 대표 작품실에 걸린 ${nf}점은 그대로 남아요.`:''}</span>
     <span class="err" id="bderr"></span>
-    <span class="actions"><button class="btn sm danger" data-act="delBoardYes" id="bdelbtn">전시실 지우기</button><button class="btn sm" data-act="delBoardNo">취소</button></span></div>`:'';
+    <span class="actions"><button class="btn sm danger" data-act="delBoardYes" id="bdelbtn">휴지통으로</button><button class="btn sm" data-act="delBoardNo">취소</button></span></div>`:'';
   openLayer(`<button class="x" data-act="close" aria-label="닫기">×</button><h2>${b?'전시실 고치기':'새 전시실'}</h2><p class="sub">단원이나 주제 이름으로 만들어요.</p>
     <div class="field"><label for="nbt">전시실 이름</label><input type="text" id="nbt" maxlength="24" value="${esc(t)}" placeholder="12월 점묘화"></div>
     <div class="field"><label for="nbw">시기 (선택)</label><input type="text" id="nbw" maxlength="12" value="${esc(wn)}" placeholder="12월"></div><span class="err" id="nberr"></span>
@@ -963,7 +1011,7 @@ function drawItemForm(err=''){
   if(T==='image'){const pv=x?x.photos[0].thumb:itf.img?.preview;
     body=`<div class="field"><label for="iimg">${x?'이미지':'이미지 고르기'}</label>${pv?`<img src="${esc(pv)}" alt="" style="max-height:160px;width:auto;align-self:flex-start;border:1px solid var(--line)">`:''}${x?'':`<input type="file" id="iimg" accept="image/*">`}</div>`}
   if(T==='memo')body=`<div class="field"><label for="imemo">내용</label><textarea id="imemo" rows="5" maxlength="600" placeholder="오늘의 활동 순서, 준비물 같은 안내">${esc(memo)}</textarea></div>`;
-  const del=x?(itf.confirm?`<div class="confirm">이 자료를 지울까요? <button class="btn sm danger" data-act="itemDelYes">지우기</button><button class="btn sm" data-act="itemDelNo">취소</button></div>`:'<button class="btn danger" data-act="itemDel">지우기</button>'):'<span></span>';
+  const del=x?(itf.confirm?`<div class="confirm">이 자료를 휴지통으로 옮길까요? <button class="btn sm danger" data-act="itemDelYes">휴지통으로</button><button class="btn sm" data-act="itemDelNo">취소</button></div>`:'<button class="btn danger" data-act="itemDel">지우기</button>'):'<span></span>';
   openLayer(`<button class="x" data-act="close" aria-label="닫기">×</button><h2>${x?'자료 고치기':'자료 넣기'}</h2><p class="sub">자료는 선생님만 볼 수 있어요.</p>${seg}${body}
     <div class="field"><label for="ititle">제목 ${T==='memo'?'(선택)':'(비워 두면 자동으로)'}</label><input type="text" id="ititle" maxlength="40" value="${esc(title)}"></div>
     ${T==='memo'?'':`<div class="field"><label for="inote">한 줄 설명 (선택)</label><input type="text" id="inote" maxlength="60" value="${esc(note)}"></div>`}
@@ -1075,7 +1123,7 @@ document.addEventListener('click',async e=>{
   if(a==='saveItem'){saveItem();return}
   if(a==='itemDel'){itf.confirm=true;drawItemForm();return}
   if(a==='itemDelNo'){itf.confirm=false;drawItemForm();return}
-  if(a==='itemDelYes'){const x=S.items.find(i=>i.id===itf.id);closeLayer();if(x){await deleteItem(x);toast('자료를 지웠어요')}return}
+  if(a==='itemDelYes'){const x=S.items.find(i=>i.id===itf.id);closeLayer();if(x){await updateDoc(doc(db,'items',x.id),{trashed:true,trashedAt:serverTimestamp()});toast('자료를 휴지통으로 옮겼어요')}return}
   if(d.mv){const xs=boardItems(S.board);const i=xs.findIndex(x=>x.id===d.mv),j=i+(+d.d);if(j<0||j>=xs.length)return;
     const b=writeBatch(db);b.update(doc(db,'items',xs[i].id),{order:xs[j].order||j});b.update(doc(db,'items',xs[j].id),{order:xs[i].order||i});await b.commit();return}
   if(d.tchip!==undefined){const f=$('#ftopic');if(f){f.value=d.tchip;f.focus()}return}
@@ -1099,10 +1147,8 @@ document.addEventListener('click',async e=>{
   if(a==='hide'&&w){await updateDoc(doc(db,'works',w.id),{hidden:!w.hidden});toast(w.hidden?'다시 보이게 했어요':'학생들에게 안 보이게 숨겼어요');return}
   if(a==='del'){ctx.confirm=true;drawWork();return}
   if(a==='delno'){ctx.confirm=false;drawWork();return}
-  if(a==='delyes'&&w){
-    const cs=await getDocs(collection(db,'works',w.id,'comments'));const b=writeBatch(db);cs.docs.forEach(c=>b.delete(c.ref));b.delete(doc(db,'works',w.id));b.delete(doc(db,'featured',w.id));await b.commit();
-    for(const p of w.photos){for(const path of [p.path,p.thumbPath]){try{await deleteObject(ref(st,path))}catch{}}}
-    closeLayer();toast('작품을 삭제했어요');return}
+  if(a==='delyes'&&w){const b=writeBatch(db);b.update(doc(db,'works',w.id),trashPatch(w));if(w.featured)b.delete(doc(db,'featured',w.id));await b.commit();
+    closeLayer();toast('휴지통으로 옮겼어요. 30일 안에 관리 창에서 되살릴 수 있어요');return}
   if(d.delc&&ctx.id){await deleteDoc(doc(db,'works',ctx.id,'comments',d.delc));return}
   if(d.z){if(d.z==='close')closeZoom();else zoomStep(d.z==='next'?1:-1);return}
   if(a==='zoom'){openZoom();return}
@@ -1123,15 +1169,36 @@ document.addEventListener('click',async e=>{
     return}
   if(a==='delBoard'){bf.confirm=true;openBoardForm(true,true);return}
   if(a==='delBoardNo'){bf.confirm=false;openBoardForm(true,true);return}
-  if(a==='delBoardYes'){if(bf.busy)return;const b=S.boards.find(x=>x.id===S.board);if(!b)return;const ws=boardWorks(b.id);
-    if(ws.length&&$('#bdel').value.trim()!==b.title){$('#bderr').textContent='전시실 이름이 맞지 않아요.';return}
-    bf.busy=true;const btn=$('#bdelbtn');btn.disabled=true;btn.textContent='지우는 중…';
-    try{for(const w of ws){const cs=await getDocs(collection(db,'works',w.id,'comments'));const bt=writeBatch(db);cs.docs.forEach(c=>bt.delete(c.ref));bt.delete(doc(db,'works',w.id));await bt.commit();
-        if(!w.featured)for(const p of w.photos)for(const path of [p.path,p.thumbPath]){try{await deleteObject(ref(st,path))}catch{}}}
-      for(const x of boardItems(b.id))await deleteItem(x);
-      await deleteDoc(doc(db,'boards',b.id));
-    }catch(err){bf.busy=false;btn.disabled=false;btn.textContent='전시실 지우기';throw err}
-    bf.busy=false;closeLayer();S.view='home';render();toast('전시실을 지웠어요');return}
+  if(a==='delBoardYes'){if(bf.busy)return;const b=S.boards.find(x=>x.id===S.board);if(!b)return;
+    bf.busy=true;const btn=$('#bdelbtn');btn.disabled=true;btn.textContent='옮기는 중…';
+    try{const bt=writeBatch(db);bt.update(doc(db,'boards',b.id),{trashed:true,trashedAt:serverTimestamp()});
+      for(const w of boardWorks(b.id))bt.update(doc(db,'works',w.id),{...trashPatch(w),trashBoard:b.id});
+      for(const x of boardItems(b.id))bt.update(doc(db,'items',x.id),{trashed:true,trashedAt:serverTimestamp(),trashBoard:b.id});
+      await bt.commit()}
+    catch(err){bf.busy=false;btn.disabled=false;btn.textContent='휴지통으로';throw err}
+    bf.busy=false;closeLayer();S.view='home';render();toast('전시실을 휴지통으로 옮겼어요');return}
+  if(a==='trash'){openTrash();return}
+  if(d.purgeask){tr.sure=d.purgeask;drawTrash();return}
+  if(d.restore||d.purge){if(tr.busy)return;tr.busy=true;el.disabled=true;const [k,id]=(d.restore||d.purge).split(':');
+    try{
+      if(d.restore){
+        if(k==='w'){const w=tr.works.find(x=>x.id===id);const bs=await getDoc(doc(db,'boards',w.boardId));
+          const stop=m=>{toast(m);tr.busy=false;el.disabled=false};
+          if(!bs.exists())return stop('이 작품이 있던 전시실이 완전히 지워져서 되살릴 수 없어요');
+          if(bs.data().trashed)return stop('이 작품이 있던 전시실이 휴지통에 있어요. 전시실을 먼저 되살려 주세요');
+          await restoreWork(w)}
+        if(k==='b')await restoreBoard(tr.boards.find(x=>x.id===id));
+        if(k==='i')await updateDoc(doc(db,'items',id),untrash);
+        toast('되살렸어요')}
+      else{
+        if(k==='w')await hardDeleteWork(tr.works.find(x=>x.id===id));
+        if(k==='i')await deleteItem(tr.items.find(x=>x.id===id));
+        if(k==='b'){for(const w of tr.works.filter(w=>w.trashBoard===id))await hardDeleteWork(w,w.featured&&await featuredExists(w.id));
+          for(const x of tr.items.filter(x=>x.trashBoard===id))await deleteItem(x);await deleteDoc(doc(db,'boards',id))}
+        toast('완전히 지웠어요')}
+      tr.busy=false;await openTrash()}
+    catch(err){tr.busy=false;throw err}
+    return}
   if(a==='csw'){const on=S.settings.commentsOn===false;await updateDoc(doc(db,'settings','class'),{commentsOn:on});el.setAttribute('aria-checked',on);toast(on?'한 줄 감상을 켰어요':'한 줄 감상을 껐어요');return}
   if(a==='qrbig'||a==='tqrbig'){const t=a==='tqrbig';const ov=document.createElement('div');ov.className='bigqr';
     ov.innerHTML=`<h2>${t?'선생님용 접속':esc(S.settings.className)}</h2><img src="${qrData(t?teacherUrl():joinUrl(),10)}" alt="${t?'선생님용 접속 QR':'학생 입장 QR'}"><p style="margin:0;color:#444">${t?'선생님 휴대폰으로 찍고 구글 계정으로 로그인하세요':'휴대폰 카메라로 찍어서 들어오세요'}</p><button data-act="bigclose">닫기</button>`;document.body.appendChild(ov);return}
