@@ -483,7 +483,7 @@ function render(){
 }
 function homeView(){
   const cur=S.year===S.settings.year;
-  const rooms=S.boards.map((b,i)=>{const ws=boardWorks(b.id);const cover=ws.find(w=>!w.hidden)?.photos?.[0]?.thumb;
+  const rooms=S.boards.map((b,i)=>{const ws=boardWorks(b.id);const cw=(b.cover&&ws.find(w=>w.id===b.cover&&!w.hidden))||ws.find(w=>!w.hidden);const cover=cw?.photos?.[0]?.thumb;
     return `<button class="room" data-board="${b.id}"${anim('r'+b.id,i)}><span class="cover"><span style="${cover?`background-image:url('${cover}')`:''}">${cover?'':'아직 작품이 없어요'}</span></span>
       <span><h3>${esc(b.title)}</h3><span class="meta">작품 ${ws.length}점${b.when?` · ${esc(b.when)}`:''}</span></span></button>`}).join('');
   const add=S.role==='teacher'&&cur?`<button class="room new" data-act="newBoard"${anim('rnew',S.boards.length)}><span class="cover"><span>＋ 새 전시실 만들기</span></span><span><h3 style="color:var(--muted)">새 전시실</h3><span class="meta">단원이나 주제별로</span></span></button>`:'';
@@ -501,7 +501,7 @@ function frame(w,showBoard,idx=0){
   return `<button class="frame${w.hidden?' hid':''}" data-work="${w.id}" aria-label="${esc(w.title||'작품')}${w.no?`, ${w.no}번 ${esc(w.name)}`:''}"${anim(w.id,idx)}>
     <span class="mat"><img src="${esc(w.photos[0].thumb)}" alt="" loading="lazy" ${imgCls(w.photos[0].thumb)} ${w.photos[0].w?`width="${w.photos[0].w}" height="${w.photos[0].h}"`:''}></span>
     <span class="cap">${w.title?`<span class="t">${esc(w.title)}</span>`:''}
-    <span class="n"><span>${showBoard?esc(b?.title||''):w.no?`${w.no}번 ${esc(w.name)}`:''}</span>${n?`<span class="h">♥ ${n}</span>`:''}${w.photos.length>1?`<span class="badge">사진 ${w.photos.length}</span>`:''}${w.featured&&S.role==='teacher'?'<span class="badge">대표</span>':''}${w.hidden?'<span class="badge">숨김</span>':''}</span></span></button>`;
+    <span class="n"><span>${showBoard?esc(b?.title||''):w.no?`${w.no}번 ${esc(w.name)}`:''}</span>${n?`<span class="h">♥ ${n}</span>`:''}${w.photos.length>1?`<span class="badge">사진 ${w.photos.length}</span>`:''}${S.role==='teacher'&&b?.cover===w.id?'<span class="badge">표지</span>':''}${w.featured&&S.role==='teacher'?'<span class="badge">대표</span>':''}${w.hidden?'<span class="badge">숨김</span>':''}</span></span></button>`;
 }
 function boardView(){
   const b=S.boards.find(x=>x.id===S.board);const ws=boardWorks(b.id);const cur=S.year===S.settings.year;
@@ -627,7 +627,7 @@ function drawWork(){
         ${canC?`<form class="addc" id="cform"><input type="text" id="cinput" maxlength="40" placeholder="${t?'선생님 한마디':'좋았던 점을 한 줄로'}" aria-label="한 줄 감상"><button class="btn sm primary">남기기</button></form><span class="err" id="cerr"></span>`:
         `<p class="note">${cur?'선생님이 감상 남기기를 잠시 꺼두었어요.':'지난 학년 작품에는 감상을 남길 수 없어요.'}</p>`}</div>
       ${t?`<div class="tadmin">${ctx.confirm?`<div class="confirm">이 작품을 삭제할까요? 사진과 감상이 모두 지워지고 되돌릴 수 없어요. <button class="btn sm danger" data-act="delyes">삭제</button><button class="btn sm" data-act="delno">취소</button></div>`:
-        ctx.feat?featForm(b?.title||''):`${w.featured?`<p class="meta" style="flex-basis:100%;margin:0">대표 작품실 · ${esc(w.topic||'')}</p><button class="btn sm" data-act="unfeat">대표 작품에서 빼기</button>`:'<button class="btn sm" data-act="feat">대표 작품으로</button>'}<button class="btn sm" data-act="editWork">고치기</button><button class="btn sm" data-act="hide">${w.hidden?'다시 보이기':'숨기기'}</button><button class="btn sm danger" data-act="del">삭제</button>`}</div>`:''}
+        ctx.feat?featForm(b?.title||''):`${w.featured?`<p class="meta" style="flex-basis:100%;margin:0">대표 작품실 · ${esc(w.topic||'')}</p><button class="btn sm" data-act="unfeat">대표 작품에서 빼기</button>`:'<button class="btn sm" data-act="feat">대표 작품으로</button>'}<button class="btn sm" data-act="editWork">고치기</button>${b&&b.cover===w.id?'<button class="btn sm" data-act="uncover" aria-pressed="true">✓ 전시실 표지</button>':'<button class="btn sm" data-act="cover">전시실 표지로</button>'}<button class="btn sm" data-act="hide">${w.hidden?'다시 보이기':'숨기기'}</button><button class="btn sm danger" data-act="del">삭제</button>`}</div>`:''}
       <div class="nav"><button class="btn sm" data-act="prev" ${i===0?'disabled':''}>← 이전</button><span class="meta">${i+1} / ${list.length}</span><button class="btn sm" data-act="next" ${i===list.length-1?'disabled':''}>다음 →</button></div>
     </div>`,'lb');
   const ci=$('#cinput');if(ci){ci.value=prevVal;if(hadFocus)ci.focus()}if(fv!=null&&$('#ftopic'))$('#ftopic').value=fv;
@@ -960,6 +960,7 @@ document.addEventListener('click',async e=>{
   if(d.mv){const xs=boardItems(S.board);const i=xs.findIndex(x=>x.id===d.mv),j=i+(+d.d);if(j<0||j>=xs.length)return;
     const b=writeBatch(db);b.update(doc(db,'items',xs[i].id),{order:xs[j].order||j});b.update(doc(db,'items',xs[j].id),{order:xs[i].order||i});await b.commit();return}
   if(d.tchip!==undefined){const f=$('#ftopic');if(f){f.value=d.tchip;f.focus()}return}
+  if(a==='cover'||a==='uncover'){const w=S.works.find(x=>x.id===ctx.id);if(!w)return;await updateDoc(doc(db,'boards',w.boardId),{cover:a==='cover'?w.id:deleteField()});toast(a==='cover'?'이 작품을 전시실 표지로 정했어요':'표지를 풀었어요. 가장 최근 작품이 표지가 돼요');return}
   if(a==='editWork'&&ctx.id){openEditWork(ctx.id);return}
   if(a==='feat'){ctx.feat=true;drawWork();const f=$('#ftopic');if(f){f.focus();f.select()}return}
   if(a==='featno'){ctx.feat=false;drawWork();return}
