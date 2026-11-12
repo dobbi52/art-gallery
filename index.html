@@ -199,6 +199,21 @@ textarea{resize:vertical;min-height:72px}
 .expo .room-t{position:absolute;top:calc(env(safe-area-inset-top,0px) + 18px);left:max(24px,calc(env(safe-area-inset-left,0px) + 24px));font-family:var(--serif);font-size:14px;color:#9C9990}
 .fade{opacity:0}
 #printArea{display:none}
+.lb .stage{position:relative}
+.zoombtn{position:absolute;top:12px;right:12px;z-index:2;background:var(--panel);border:1px solid var(--line-strong);border-radius:999px;padding:5px 12px;font-size:12.5px;color:var(--ink)}
+.zoombtn:hover{border-color:var(--ink)}
+.zimgbtn{display:block;padding:0;border:0;background:none;cursor:zoom-in}
+.zoomv{position:fixed;inset:0;z-index:90;background:#0B0B0A;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;animation:fadein .25s ease both}
+.zoomv img{max-width:100vw;max-height:100vh;width:auto;height:auto;user-select:none;-webkit-user-select:none;transition:transform .15s ease-out;cursor:zoom-in;will-change:transform}
+.zoomv.zin img{cursor:grab}
+.zoomv.drag img{transition:none;cursor:grabbing}
+.zcap{position:absolute;left:16px;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);text-align:center;color:#D8D3C8;font-family:var(--serif);font-size:15px;pointer-events:none;text-shadow:0 1px 6px #000}
+.zbtn{position:absolute;background:rgba(0,0,0,.5);color:#fff;border:1px solid rgba(255,255,255,.28);border-radius:999px;width:48px;height:48px;font-size:26px;line-height:1;display:flex;align-items:center;justify-content:center;opacity:.75;transition:opacity .2s}
+.zbtn:hover,.zbtn:focus-visible{opacity:1}
+.zx{top:calc(env(safe-area-inset-top,0px) + 14px);right:max(14px,calc(env(safe-area-inset-right,0px) + 14px))}
+.zp{top:50%;transform:translateY(-50%);left:max(14px,calc(env(safe-area-inset-left,0px) + 14px))}
+.zn{top:50%;transform:translateY(-50%);right:max(14px,calc(env(safe-area-inset-right,0px) + 14px))}
+.zhint{position:absolute;top:calc(env(safe-area-inset-top,0px) + 24px);left:50%;transform:translateX(-50%);color:#8F8A80;font-size:12.5px;pointer-events:none;white-space:nowrap}
 .slot .ed{position:absolute;left:4px;right:4px;bottom:4px;background:rgba(255,255,255,.92);color:#1D1D1B;border:0;border-radius:4px;font-size:11.5px;padding:5px 2px;z-index:2}
 .cropper{background:var(--panel);width:100%;max-width:820px;max-height:100%;overflow:auto;border-radius:6px;padding:20px;display:flex;flex-direction:column;gap:14px}
 .crop-stage{position:relative;align-self:center;overflow:hidden;touch-action:none;background:var(--wall);user-select:none;-webkit-user-select:none}
@@ -585,7 +600,7 @@ function openWork(id,dir=0,mode){
   if(ctx.mode==='work')ctx.csub=onSnapshot(collection(db,'works',id,'comments'),q=>{ctx.comments=q.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>toMs(a.createdAt)-toMs(b.createdAt));drawWork()},()=>{});
 }
 function stageHtml(w){const ph=w.photos[Math.min(ctx.photo,w.photos.length-1)];
-  return `<div class="stage"><div class="mat"><img src="${esc(ph.url)}" alt="${esc(w.title)}"></div>
+  return `<div class="stage"><button class="zoombtn" data-act="zoom">⛶ 전체 화면</button><div class="mat"><button class="zimgbtn" data-act="zoom" aria-label="전체 화면으로 크게 보기"><img src="${esc(ph.url)}" alt="${esc(w.title)}"></button></div>
     ${w.photos.length>1?`<div class="thumbs">${w.photos.map((p,k)=>`<button data-ph="${k}" aria-pressed="${k===ctx.photo}" style="background-image:url('${esc(p.thumb)}')" aria-label="사진 ${k+1}"></button>`).join('')}</div>`:''}</div>`}
 const navHtml=(i,n)=>`<div class="nav"><button class="btn sm" data-act="prev" ${i===0?'disabled':''}>← 이전</button><span class="meta">${i+1} / ${n}</span><button class="btn sm" data-act="next" ${i===n-1?'disabled':''}>다음 →</button></div>`;
 function afterDraw(){if(ctx.dir){const m=$('.lb .stage .mat');if(m){m.style.setProperty('--dx',(ctx.dir*48)+'px');m.classList.add('slide')}ctx.dir=0}}
@@ -616,7 +631,7 @@ function drawWork(){
   const cur=w.year===S.settings.year;const canC=cur&&(t||S.settings.commentsOn!==false);
   const ph=w.photos[Math.min(ctx.photo,w.photos.length-1)];
   openLayer(`<button class="x" data-act="close" aria-label="닫기">×</button>
-    <div class="stage"><div class="mat"><img src="${esc(ph.url)}" alt="${esc(w.title)}"></div>
+    <div class="stage"><button class="zoombtn" data-act="zoom">⛶ 전체 화면</button><div class="mat"><button class="zimgbtn" data-act="zoom" aria-label="전체 화면으로 크게 보기"><img src="${esc(ph.url)}" alt="${esc(w.title)}"></button></div>
       ${w.photos.length>1?`<div class="thumbs">${w.photos.map((p,k)=>`<button data-ph="${k}" aria-pressed="${k===ctx.photo}" style="background-image:url('${esc(p.thumb)}')" aria-label="사진 ${k+1}"></button>`).join('')}</div>`:''}</div>
     <div class="info">
       <p class="eyebrow" style="margin:0">${esc(b?.title||'')}</p>
@@ -634,6 +649,48 @@ function drawWork(){
   if(ctx.dir){const m=$('.lb .stage .mat');m.style.setProperty('--dx',(ctx.dir*48)+'px');m.classList.add('slide');ctx.dir=0}
 }
 function step(d){const list=currentList();const i=list.findIndex(w=>w.id===ctx.id)+d;if(i>=0&&i<list.length)openWork(list[i].id,d)}
+
+/* ---------- 전체 화면 크게 보기 ---------- */
+let zm=null;
+function zoomInfo(){
+  if(ctx.mode==='ref'){const x=S.items.find(i=>i.id===ctx.id);return x&&{photos:x.photos,title:x.title||'',sub:'',i:0,n:1}}
+  const list=currentList();const i=list.findIndex(w=>w.id===ctx.id);const w=list[i];if(!w)return null;
+  return {photos:w.photos,title:w.title||'',sub:ctx.mode==='feat'?`${w.year}학년도`:(w.no?`${w.no}번 ${w.name}`:''),i,n:list.length}}
+function openZoom(){if($('.zoomv'))return;const el=document.createElement('div');el.className='zoomv';el.setAttribute('role','dialog');el.setAttribute('aria-label','전체 화면 보기');
+  el.innerHTML=`<img id="zimg" alt="" draggable="false"><span class="zhint">두 번 누르거나 휠·두 손가락으로 확대</span><div class="zcap" id="zcap"></div>
+    <button class="zbtn zx" data-z="close" aria-label="닫기">×</button><button class="zbtn zp" data-z="prev" aria-label="이전 작품">‹</button><button class="zbtn zn" data-z="next" aria-label="다음 작품">›</button>`;
+  document.body.appendChild(el);zm={s:1,x:0,y:0,pts:new Map(),fs:false};setZoomImg();bindZoom(el);
+  setTimeout(()=>{const h=el.querySelector('.zhint');if(h)h.style.transition='opacity .6s',h.style.opacity='0'},2200);
+  try{const r=el.requestFullscreen?.();if(r&&r.then)r.then(()=>{if(zm)zm.fs=true}).catch(()=>{})}catch{}}
+function setZoomImg(){const z=zoomInfo();if(!z)return closeZoom();const img=$('#zimg');
+  img.src=z.photos[Math.min(ctx.photo,z.photos.length-1)].url;img.alt=z.title||'작품';
+  $('#zcap').textContent=[z.title,z.sub].filter(Boolean).join(' · ');
+  zm.s=1;zm.x=0;zm.y=0;applyZ();
+  $('.zoomv .zp').hidden=!(z.i>0);$('.zoomv .zn').hidden=!(z.i<z.n-1)}
+function applyZ(){const img=$('#zimg');if(!img)return;const bw=img.offsetWidth,bh=img.offsetHeight;
+  const mx=Math.max(0,(bw*zm.s-innerWidth)/2),my=Math.max(0,(bh*zm.s-innerHeight)/2);
+  zm.x=clamp(zm.x,-mx,mx);zm.y=clamp(zm.y,-my,my);img.style.transform=`translate(${zm.x}px,${zm.y}px) scale(${zm.s})`;
+  $('.zoomv').classList.toggle('zin',zm.s>1)}
+function zoomAt(ns,cx,cy){ns=clamp(ns,1,6);const px=cx-innerWidth/2,py=cy-innerHeight/2;
+  zm.x=px-(px-zm.x)*(ns/zm.s);zm.y=py-(py-zm.y)*(ns/zm.s);zm.s=ns;if(ns===1){zm.x=0;zm.y=0}applyZ()}
+function zoomStep(d){step(d);setZoomImg()}
+function closeZoom(){const el=$('.zoomv');if(!el)return;if(document.fullscreenElement){try{document.exitFullscreen().catch(()=>{})}catch{}}el.remove();zm=null}
+document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement&&zm&&zm.fs)closeZoom()});
+function bindZoom(el){const img=el.querySelector('#zimg');let pinch=null,drag=null,lastTap=0;
+  el.addEventListener('wheel',e=>{e.preventDefault();zoomAt(zm.s*Math.exp(-e.deltaY*.0018),e.clientX,e.clientY)},{passive:false});
+  img.addEventListener('pointerdown',e=>{e.preventDefault();try{img.setPointerCapture(e.pointerId)}catch{}zm.pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(zm.pts.size===2){const [a,b]=[...zm.pts.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),s:zm.s,cx:(a.x+b.x)/2,cy:(a.y+b.y)/2};drag=null}
+    else drag={x:e.clientX,y:e.clientY,ox:zm.x,oy:zm.y,moved:false};el.classList.add('drag')});
+  img.addEventListener('pointermove',e=>{if(!zm.pts.has(e.pointerId))return;zm.pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pinch&&zm.pts.size===2){const [a,b]=[...zm.pts.values()];zoomAt(pinch.s*Math.hypot(a.x-b.x,a.y-b.y)/pinch.d,pinch.cx,pinch.cy);return}
+    if(drag){const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.abs(dx)+Math.abs(dy)>6)drag.moved=true;
+      if(zm.s>1){zm.x=drag.ox+dx;zm.y=drag.oy+dy;applyZ()}}});
+  const up=e=>{zm.pts.delete(e.pointerId);if(zm.pts.size<2)pinch=null;el.classList.remove('drag');
+    if(drag&&zm.pts.size===0){const dx=e.clientX-drag.x;
+      if(!drag.moved){const now=Date.now();if(now-lastTap<320){zoomAt(zm.s>1?1:2.5,e.clientX,e.clientY);lastTap=0}else lastTap=now}
+      else if(zm.s===1&&Math.abs(dx)>60){zoomStep(dx<0?1:-1)}
+      drag=null}};
+  img.addEventListener('pointerup',up);img.addEventListener('pointercancel',up)}
 
 /* ---------- 올리기 ---------- */
 let up={photos:[],board:null,busy:false};
@@ -985,6 +1042,8 @@ document.addEventListener('click',async e=>{
     for(const p of w.photos){for(const path of [p.path,p.thumbPath]){try{await deleteObject(ref(st,path))}catch{}}}
     closeLayer();toast('작품을 삭제했어요');return}
   if(d.delc&&ctx.id){await deleteDoc(doc(db,'works',ctx.id,'comments',d.delc));return}
+  if(d.z){if(d.z==='close')closeZoom();else zoomStep(d.z==='next'?1:-1);return}
+  if(a==='zoom'){openZoom();return}
   if(d.crop!==undefined){openCrop(+d.crop);return}
   if(a==='rotL'||a==='rotR'){cr.rot=(cr.rot+(a==='rotR'?90:270))%360;cr.box={x:0,y:0,w:1,h:1};const W=cr.img.naturalWidth,H=cr.img.naturalHeight;cr.rw=cr.rot%180?H:W;cr.rh=cr.rot%180?W:H;fitRatio();drawCrop();return}
   if(d.ratio){cr.rk=d.ratio;cr.box={x:0,y:0,w:1,h:1};fitRatio();drawCrop();return}
@@ -1052,6 +1111,8 @@ document.addEventListener('change',async e=>{
     itf.img={full,thumb,preview:URL.createObjectURL(thumb.blob)};drawItemForm()}catch{drawItemForm('이 이미지는 열 수 없어요.')}return}
   if(e.target.dataset?.slot===undefined||!e.target.files[0])return;up.board=$('#uboard')?.value||up.board;addPhoto(e.target.files[0])});
 document.addEventListener('keydown',e=>{
+  if($('.zoomv')){if(e.key==='Escape')closeZoom();if(e.key==='ArrowRight')zoomStep(1);if(e.key==='ArrowLeft')zoomStep(-1);
+    if(e.key==='+'||e.key==='=')zoomAt(zm.s*1.4,innerWidth/2,innerHeight/2);if(e.key==='-')zoomAt(zm.s/1.4,innerWidth/2,innerHeight/2);return}
   if($('.bigqr')&&e.key==='Escape'){$('.bigqr').remove();return}
   if($('#expo')){if(e.key==='Escape')closeExpo();if(e.key==='ArrowRight'||e.key==='ArrowLeft'){ex.i=(ex.i+(e.key==='ArrowRight'?1:-1)+ex.list.length)%ex.list.length;showExpo();tick()}return}
   if(!$('#ov'))return;if($('.cropper')){if(e.key==='Escape')cancelCrop();return}if(e.key==='Escape'&&!up.busy&&!itf.busy&&!bf.busy)closeLayer();
