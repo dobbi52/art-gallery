@@ -281,7 +281,7 @@ img.fi.ok{opacity:1}
 </head>
 <body>
 <header class="top gut" id="hdr" hidden><div class="inner">
-  <button class="brand" id="home"><small id="yearLabel"></small><strong id="clsName">우리 반 미술관</strong></button>
+  <button class="brand" id="home"><strong id="clsName">우리 반 미술관</strong></button>
   <div class="hright">
     <button class="who" id="who"></button>
     <button class="btn sm openbtn" id="openBtn" hidden></button>
@@ -447,7 +447,6 @@ function render(){
   if(!S.settings)return;
   $('#hdr').hidden=false;
   $('#clsName').textContent=S.settings.className||'우리 반 미술관';
-  $('#yearLabel').textContent=`${S.year}학년도`;
   const yrs=S.role==='teacher'?[...new Set([...(S.settings.years||[]),S.settings.year])].sort((a,b)=>b-a):[S.settings.year];
   const fv=S.view==='featured'||S.view==='topic';
   $('#tabs').innerHTML=yrs.map(y=>`<button role="tab" data-y="${y}" aria-selected="${!fv&&y===S.year}">${y}학년도 미술관</button>`).join('')+`<span class="gap" aria-hidden="true"></span><button role="tab" data-act="tabFeat" aria-selected="${fv}">대표 작품실</button>`;
